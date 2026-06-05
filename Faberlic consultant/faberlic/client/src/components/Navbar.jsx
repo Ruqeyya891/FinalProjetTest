@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Bot, LayoutDashboard, Search, BookOpen, LogOut, Menu, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-toastify';
+import { categories, slugify } from '../utils/categories';
 
 const Navbar = ({ isAdmin }) => {
   const navigate = useNavigate();
@@ -16,63 +17,6 @@ const Navbar = ({ isAdmin }) => {
     navigate('/login');
     window.dispatchEvent(new Event('storage'));
   };
-
-  const categories = [
-    {
-      name: 'YENİ MƏHSULLAR',
-      subCategories: []
-    },
-    {
-      name: 'QULLUQ',
-      subCategories: [
-        {
-          name: 'Üz qulluğu',
-          items: ['Aksesuarlar', 'Dodaq balzamları', 'Gecə kremləri', 'Göz qapaqları və kirpiklər üçün vasitələr', 'Gündüz kremləri', 'Günəşdən qorunma', 'Skrablar, pilinqlər', 'Təmizləmə və demakiyaj', 'Zərdablar, konsentratlar', 'Üz üçün maskalar']
-        },
-        {
-          name: 'Bədənə qulluq',
-          items: ['Aksesuarlar', 'Ayaqlar üçün vasitələr', 'Bədən quruluşunun korreksiyası', 'Depilyasiya vasitələri', 'Dezodorantlar', 'Günəşdən qorunma vasitələri', 'Kremlər, süd', 'Vanna və duş üçün', 'Əllər üçün vasitələr']
-        },
-        {
-          name: 'Saçlar',
-          items: ['Aksesuarlar', 'Balzamlar, maskalar', 'Boyama', 'Saç boyaları', 'Saç düzləşdirmə vasitələri', 'Saç rəng açıcıları', 'Xüsusi qulluq', 'Şampunlar']
-        }
-      ]
-    },
-    {
-      name: 'MAKIYAJ',
-      subCategories: [
-        {
-          name: 'Gözlər',
-          items: ['Göz kölgələri', 'Kirpik tuşu', 'Qələmlər, layner']
-        },
-        {
-          name: 'Dodaqlar',
-          items: ['Dodaq boyaları', 'Parladıcılar, balzamlar', 'Qələmlər', 'Sınaq nümunələri']
-        },
-        {
-          name: 'Üz',
-          items: ['BB krem', 'Bronzerlər, haylayterlər', 'Kirşan', 'Korrektorlar, konsilerlər', 'Tonal təməllər və kuşonlar', 'Ənlik']
-        },
-        {
-          name: 'Dırnaqlar',
-          items: ['Baza, top, dırnaq boyasının çıxarılması', 'Dırnaq aksesuarları', 'Dırnaq boyaları', 'Qulluq vasitələri']
-        },
-        {
-          name: 'Qaşlar',
-          items: []
-        }
-      ]
-    },
-    { name: 'PARFÜMERİYA', subCategories: [] },
-    { name: 'DƏB', subCategories: [] },
-    { name: 'SAĞLAMLIQ', subCategories: [] },
-    { name: 'EV', subCategories: [] },
-    { name: 'UŞAQLARA', subCategories: [] },
-    { name: 'BİZNES', subCategories: [] },
-    { name: 'AKSİYALAR', subCategories: [] },
-    { name: 'ENDİRİM', subCategories: [] }
-  ];
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
@@ -167,7 +111,7 @@ const Navbar = ({ isAdmin }) => {
                 onMouseLeave={() => setActiveCategory(null)}
               >
                 <Link
-                  to={`/products?category=${cat.name}`}
+                  to={`/products?category=${cat.slug}`}
                   className="text-[10px] xl:text-[11px] font-bold tracking-wider text-gray-800 hover:text-pink-600 h-full flex items-center px-1 xl:px-2 transition-colors"
                 >
                   {cat.name}
@@ -178,15 +122,22 @@ const Navbar = ({ isAdmin }) => {
                   <div className="absolute top-12 left-0 bg-white shadow-xl border-t border-gray-100 w-[700px] xl:w-[800px] p-6 xl:p-8 grid grid-cols-3 xl:grid-cols-4 gap-4 xl:gap-8 z-50">
                     {cat.subCategories.map((sub) => (
                       <div key={sub.name}>
-                        <h4 className="font-bold text-sm mb-3 border-b border-gray-100 pb-2">{sub.name}</h4>
+                        <h4 className="font-bold text-sm mb-3 border-b border-gray-100 pb-2">
+                          <Link 
+                            to={`/products?category=${cat.slug}&subcategory=${sub.slug}`}
+                            className="hover:text-pink-600"
+                          >
+                            {sub.name}
+                          </Link>
+                        </h4>
                         <ul className="space-y-1.5">
-                          {sub.items.map((item) => (
-                            <li key={item}>
+                          {sub.childCategories.map((child) => (
+                            <li key={child.name}>
                               <Link
-                                to={`/products?category=${cat.name}&subcategory=${sub.name}&item=${item}`}
+                                to={`/products?category=${cat.slug}&subcategory=${sub.slug}&childCategory=${child.slug}`}
                                 className="text-xs text-gray-600 hover:text-pink-600 transition-colors"
                               >
-                                {item}
+                                {child.name}
                               </Link>
                             </li>
                           ))}
@@ -257,7 +208,7 @@ const Navbar = ({ isAdmin }) => {
                   <button
                     onClick={() => {
                       if (cat.subCategories.length === 0) {
-                        navigate(`/products?category=${cat.name}`);
+                        navigate(`/products?category=${cat.slug}`);
                         setMobileMenuOpen(false);
                       } else {
                         setMobileCategoryOpen(mobileCategoryOpen === cat.name ? null : cat.name);
@@ -275,20 +226,28 @@ const Navbar = ({ isAdmin }) => {
                     <div className="pl-4 mt-2 space-y-2 pb-2">
                       {cat.subCategories.map((sub) => (
                         <div key={sub.name} className="space-y-1">
-                          <h4 className="text-xs font-bold text-gray-600">{sub.name}</h4>
-                          <ul className="pl-3 space-y-1">
-                            {sub.items.map((item) => (
-                              <li key={item}>
-                                <Link
-                                  to={`/products?category=${cat.name}&subcategory=${sub.name}&item=${item}`}
-                                  onClick={() => setMobileMenuOpen(false)}
-                                  className="text-xs text-gray-500 hover:text-pink-600"
-                                >
-                                  {item}
-                                </Link>
-                              </li>
-                            ))}
-                          </ul>
+                          <Link 
+                            to={`/products?category=${cat.slug}&subcategory=${sub.slug}`}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="text-xs font-bold text-gray-600 hover:text-pink-600"
+                          >
+                            {sub.name}
+                          </Link>
+                          {sub.childCategories.length > 0 && (
+                            <ul className="pl-3 space-y-1">
+                              {sub.childCategories.map((child) => (
+                                <li key={child.name}>
+                                  <Link
+                                    to={`/products?category=${cat.slug}&subcategory=${sub.slug}&childCategory=${child.slug}`}
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="text-xs text-gray-500 hover:text-pink-600"
+                                  >
+                                    {child.name}
+                                  </Link>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
                       ))}
                     </div>

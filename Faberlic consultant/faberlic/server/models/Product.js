@@ -9,6 +9,7 @@ const productSchema = new mongoose.Schema(
 
     description: {
       type: String,
+      default: "",
     },
 
     price_catalog: {
@@ -39,9 +40,29 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
-    category: {
+    categoryName: {
       type: String,
       required: true,
+    },
+    categorySlug: {
+      type: String,
+      required: true,
+    },
+    subCategoryName: {
+      type: String,
+      default: "",
+    },
+    subCategorySlug: {
+      type: String,
+      default: "",
+    },
+    childCategoryName: {
+      type: String,
+      default: "",
+    },
+    childCategorySlug: {
+      type: String,
+      default: "",
     },
 
     // New filter fields
@@ -72,10 +93,12 @@ const productSchema = new mongoose.Schema(
 
     ingredients: {
       type: String,
+      default: "",
     },
 
     usage: {
       type: String,
+      default: "",
     },
 
     stock: {

@@ -51,6 +51,7 @@ const chatRoutes = require('./routes/chatRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const catalogRoutes = require('./routes/catalogRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 
 app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
@@ -58,6 +59,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/catalogs', catalogRoutes);
+app.use('/api/admin/analytics', analyticsRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

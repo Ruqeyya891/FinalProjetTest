@@ -1,18 +1,8 @@
 const Product = require('../models/Product');
 const { parseFaberlicProducts } = require('../utils/scraper');
-
-const categoryHierarchy = {
-  'QULLUQ': ['Üz qulluğu', 'Bədənə qulluq', 'Saçlar', 'Boyama', 'Aromaterapiya', 'Ağız boşluğunun gigiyenası', 'Gigiyena', 'Kişilərə', 'Kosmesevtika', 'Uşaqlara'],
-  'MAKIYAJ': ['Gözlər', 'Dodaqlar', 'Üz', 'Dırnaqlar', 'Qaşlar'],
-  'PARFÜMERİYA': [],
-  'DƏB': [],
-  'SAĞLAMLIQ': [],
-  'EV': [],
-  'UŞAQLARA': [],
-  'BİZNES': [],
-  'AKSİYALAR': [],
-  'ENDİRİM': []
-};
+const { categories, slugify } = require('../utils/categories');
+const Papa = require('papaparse');
+const fs = require('fs');
 
 // @desc Get all products
 // @route GET /api/products
@@ -21,6 +11,7 @@ const getProducts = async (req, res) => {
         const { 
           category, 
           subcategory, 
+          childCategory,
           item, 
           search, 
           isAdmin,
@@ -46,19 +37,13 @@ const getProducts = async (req, res) => {
             query.isInStock = true;
         }
 
-        // Category filtering logic
-        if (item) {
-            query.category = item;
+        // Category filtering logic with slugs
+        if (childCategory) {
+            query.childCategorySlug = childCategory;
         } else if (subcategory) {
-            query.category = subcategory;
+            query.subCategorySlug = subcategory;
         } else if (category) {
-            // If only main category is selected, we search for products that match 
-            // the main category OR belong to its hierarchy.
-            if (categoryHierarchy[category] && categoryHierarchy[category].length > 0) {
-                query.category = { $in: [category, ...categoryHierarchy[category]] };
-            } else {
-                query.category = category;
-            }
+            query.categorySlug = category;
         }
 
         // Boolean filters - if user explicitly requests, use their choice
@@ -174,6 +159,98 @@ const updateProduct = async (req, res) => {
     }
 };
 
+// @desc Import products from CSV (Admin)
+// @route POST /api/products/import
+const importProducts = async (req, res) => {
+    console.log('🔍 Step 4: Import endpoint hit!'); // Debug log 4
+    try {
+        console.log('🔍 Step 5: req.file:', req.file); // Debug log 5
+        if (!req.file) {
+            console.error('❌ No file uploaded!');
+            return res.status(400).json({ message: 'Fayl yüklənməyib' });
+        }
+
+        // Parse CSV file
+        const csvFile = fs.readFileSync(req.file.path, 'utf8');
+        console.log('🔍 Step 6: CSV file content:', csvFile.slice(0, 200)); // Debug log 6 (truncated)
+        const results = Papa.parse(csvFile, {
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: (header) => header.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+        });
+        console.log('🔍 Step 7: Parsed CSV results:', results); // Debug log 7
+        console.log('🔍 Step 8: Number of rows:', results.data.length); // Debug log 8
+
+        const importedProducts = [];
+        const errors = [];
+
+        for (const row of results.data) {
+            try {
+                // Map CSV fields to product model
+                const productData = {
+                    name: row.name || row.ad || '',
+                    sku: row.sku || row.artikul || row.article || '',
+                    description: row.description || row.aciklama || '',
+                    ingredients: row.ingredients || row.terkib || '',
+                    usage: row.usage || row.istifade || '',
+                    image: row.imageurl || row.image || row.photo || row.sekil || '',
+                    price_catalog: parseFloat(row.catalogprice || row.price_catalog || row.katalogqiymeti || 0),
+                    price_sale: parseFloat(row.saleprice || row.price_sale || row.satisqiymeti || 0),
+                    price_anbar: parseFloat(row.stockprice || row.anbarprice || row.price_anbar || 0),
+                    stock: parseInt(row.stock || 0),
+                    categorySlug: row.categoryslug || row.category_slug || '',
+                    subCategorySlug: row.subcategoryslug || row.subcategory_slug || '',
+                    childCategorySlug: row.childcategoryslug || row.childcategory_slug || '',
+                    isInStock: row.instock?.toString().toLowerCase() === 'true' || true,
+                    isNew: row.isnew?.toString().toLowerCase() === 'true' || false,
+                    isDiscount: row.isdiscount?.toString().toLowerCase() === 'true' || false,
+                    isSuperPrice: row.issuperprice?.toString().toLowerCase() === 'true' || false,
+                    isHit: row.ishit?.toString().toLowerCase() === 'true' || false,
+                    isActive: true
+                };
+
+                // Try to find category names from slugs
+                const findCategoryBySlug = (slug) => {
+                    if (!slug) return { name: '', slug: '' };
+                    const mainCat = categories.find(c => c.slug === slug);
+                    if (mainCat) return { name: mainCat.name, slug: mainCat.slug };
+                    for (const cat of categories) {
+                        const sub = cat.subCategories?.find(s => s.slug === slug);
+                        if (sub) return { name: sub.name, slug: sub.slug };
+                        for (const sub of cat.subCategories || []) {
+                            const child = sub.childCategories?.find(ch => ch.slug === slug);
+                            if (child) return { name: child.name, slug: child.slug };
+                        }
+                    }
+                    return { name: '', slug };
+                };
+
+                productData.categoryName = findCategoryBySlug(productData.categorySlug).name;
+                productData.subCategoryName = findCategoryBySlug(productData.subCategorySlug).name;
+                productData.childCategoryName = findCategoryBySlug(productData.childCategorySlug).name;
+
+                // Save product
+                const product = new Product(productData);
+                const savedProduct = await product.save();
+                importedProducts.push(savedProduct);
+            } catch (err) {
+                errors.push({ row: row, error: err.message });
+            }
+        }
+
+        // Clean up uploaded file
+        fs.unlinkSync(req.file.path);
+
+        res.status(200).json({
+            message: 'Import tamamlandı',
+            imported: importedProducts.length,
+            errors: errors.length > 0 ? errors : undefined
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // @desc Delete product (Admin)
 // @route DELETE /api/products/:id
 const deleteProduct = async (req, res) => {
@@ -194,5 +271,6 @@ module.exports = {
     syncProducts,
     createProduct,
     updateProduct,
-    deleteProduct
+    deleteProduct,
+    importProducts
 };

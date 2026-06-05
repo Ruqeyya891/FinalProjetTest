@@ -3,19 +3,7 @@ import { Search, ShoppingCart, Info, Sparkles, Filter, ChevronRight, Heart, Home
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
-
-const categoryHierarchy = {
-  'QULLUQ': ['Üz qulluğu', 'Bədənə qulluq', 'Saçlar', 'Boyama', 'Aromaterapiya', 'Ağız boşluğunun gigiyenası', 'Gigiyena', 'Kişilərə', 'Kosmesevtika', 'Uşaqlara'],
-  'MAKIYAJ': ['Gözlər', 'Dodaqlar', 'Üz', 'Dırnaqlar', 'Qaşlar'],
-  'PARFÜMERİYA': [],
-  'DƏB': [],
-  'SAĞLAMLIQ': [],
-  'EV': [],
-  'UŞAQLARA': [],
-  'BİZNES': [],
-  'AKSİYALAR': [],
-  'ENDİRİM': []
-};
+import { categories as categoryData } from '../utils/categories';
 
 const collections = [
   "24K Pure Gold", "8 Element", "Activity", "Aromania", "Alatau", "Blonde Icon",
@@ -110,6 +98,11 @@ const hairTypes = [
   "Boyanmış", "Bütün tiplər", "Nazik", "Normal", "Zədəlilər"
 ];
 
+// Helper function to format price
+const formatPrice = (price) => {
+  return `${parseFloat(price).toFixed(2)} ₼`;
+};
+
 const Products = () => {
   // ALL HOOKS MUST BE AT THE TOP - NO CONDITIONAL BEFORE THEM!
   const navigate = useNavigate();
@@ -137,23 +130,28 @@ const Products = () => {
     maxPrice: ''
   });
 
-  const mainCategory = searchParams.get('category');
-  const subCategory = searchParams.get('subcategory');
-  const item = searchParams.get('item');
+  const mainCategorySlug = searchParams.get('category');
+  const subCategorySlug = searchParams.get('subcategory');
+  const childCategorySlug = searchParams.get('childCategory');
+
+  // Find current category objects
+  const currentMainCategory = categoryData.find(c => c.slug === mainCategorySlug);
+  const currentSubCategory = currentMainCategory?.subCategories.find(sc => sc.slug === subCategorySlug);
 
   useEffect(() => {
     fetchProducts();
     fetchFavorites();
-  }, [mainCategory, subCategory, item, activeFilters]);
+  }, [mainCategorySlug, subCategorySlug, childCategorySlug, activeFilters]);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
       const params = {};
       
-      // Determine which category to send to backend
-      let targetCategory = item || subCategory || mainCategory;
-      if (targetCategory) params.category = targetCategory;
+      // Use slugs for filtering
+      if (childCategorySlug) params.childCategory = childCategorySlug;
+      else if (subCategorySlug) params.subcategory = subCategorySlug;
+      else if (mainCategorySlug) params.category = mainCategorySlug;
 
       // Add all other filters
       if (activeFilters.isInStock) params.isInStock = true;
@@ -233,10 +231,7 @@ const Products = () => {
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const categories = ['Hamısı', 'QULLUQ', 'MAKIYAJ', 'PARFÜMERİYA', 'DƏB', 'SAĞLAMLIQ', 'EV', 'UŞAQLARA', 'BİZNES', 'AKSİYALAR', 'ENDİRİM'];
 
-  // Get current subcategories
-  const currentSubcategories = mainCategory && categoryHierarchy[mainCategory] ? ['Hamısı', ...categoryHierarchy[mainCategory]] : [];
 
   if (loading) return (
     <div className="bg-pink-50/30 min-h-screen flex items-center justify-center">
@@ -255,7 +250,17 @@ const Products = () => {
               <span>Baş</span>
             </Link>
             <ChevronRight size={14} className="mx-2" />
-            {mainCategory && <span className="text-gray-900 font-medium">{mainCategory}</span>}
+            {currentMainCategory && (
+              <>
+                <span className="text-gray-900 font-medium">{currentMainCategory.name}</span>
+                {currentSubCategory && (
+                  <>
+                    <ChevronRight size={14} className="mx-2" />
+                    <span className="text-gray-900 font-medium">{currentSubCategory.name}</span>
+                  </>
+                )}
+              </>
+            )}
           </nav>
         </div>
 
@@ -264,10 +269,10 @@ const Products = () => {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
               <Sparkles className="text-pink-600" />
-              {mainCategory || 'Bütün Məhsullar'}
+              {currentSubCategory?.name || currentMainCategory?.name || 'Bütün Məhsullar'}
             </h1>
             <p className="text-gray-500 mt-2 text-sm md:text-base">
-              {mainCategory ? `${mainCategory} kateqoriyası üzrə məhsullar` : 'Ən keyfiyyətli Faberlik məhsulları sizin üçün seçilib.'}
+              {currentMainCategory ? `${currentMainCategory.name} kateqoriyası üzrə məhsullar` : 'Ən keyfiyyətli Faberlik məhsulları sizin üçün seçilib.'}
             </p>
           </div>
           <div className="relative max-w-md w-full">
@@ -283,28 +288,71 @@ const Products = () => {
         </div>
 
         {/* Subcategory Buttons (if main category selected) */}
-        {currentSubcategories.length > 1 && (
+        {currentMainCategory?.subCategories.length > 0 && (
           <div className="mb-8 md:mb-12">
             <div className="flex flex-wrap gap-2 md:gap-3 overflow-x-auto pb-2">
-              {currentSubcategories.map(subCat => (
               <button
-                key={subCat}
                 onClick={() => {
-                  if (subCat === 'Hamısı') {
-                    navigate(`/products?category=${mainCategory}`);
-                  } else {
-                    navigate(`/products?category=${mainCategory}&subcategory=${subCat}`);
-                  }
+                  navigate(`/products?category=${currentMainCategory.slug}`);
                 }}
                 className={`px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-semibold text-sm transition-all flex-shrink-0 ${
-                  (subCategory === subCat || (!subCategory && subCat === 'Hamısı')) 
+                  !subCategorySlug 
                     ? 'bg-pink-600 text-white shadow-md' 
                     : 'bg-white text-gray-700 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
                 }`}
               >
-                {subCat}
+                Hamısı
               </button>
-            ))}
+              {currentMainCategory.subCategories.map(subCat => (
+                <button
+                  key={subCat.slug}
+                  onClick={() => {
+                    navigate(`/products?category=${currentMainCategory.slug}&subcategory=${subCat.slug}`);
+                  }}
+                  className={`px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-semibold text-sm transition-all flex-shrink-0 ${
+                    subCategorySlug === subCat.slug
+                      ? 'bg-pink-600 text-white shadow-md' 
+                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
+                  }`}
+                >
+                  {subCat.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Child Category Buttons (if subcategory selected) */}
+        {currentSubCategory?.childCategories.length > 0 && (
+          <div className="mb-8 md:mb-12">
+            <div className="flex flex-wrap gap-2 md:gap-3 overflow-x-auto pb-2">
+              <button
+                onClick={() => {
+                  navigate(`/products?category=${currentMainCategory.slug}&subcategory=${currentSubCategory.slug}`);
+                }}
+                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl font-medium text-xs md:text-sm transition-all flex-shrink-0 ${
+                  !childCategorySlug 
+                    ? 'bg-pink-600 text-white shadow-md' 
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
+                }`}
+              >
+                Hamısı
+              </button>
+              {currentSubCategory.childCategories.map(childCat => (
+                <button
+                  key={childCat.slug}
+                  onClick={() => {
+                    navigate(`/products?category=${currentMainCategory.slug}&subcategory=${currentSubCategory.slug}&childCategory=${childCat.slug}`);
+                  }}
+                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl font-medium text-xs md:text-sm transition-all flex-shrink-0 ${
+                    childCategorySlug === childCat.slug
+                      ? 'bg-pink-600 text-white shadow-md' 
+                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
+                  }`}
+                >
+                  {childCat.name}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -494,10 +542,10 @@ const Products = () => {
                       
                       <div className="flex items-center justify-between pt-2 md:pt-4 border-t border-pink-50">
                         <div>
-                          {product.price_catalog !== product.price_sale && (
-                            <div className="text-gray-400 text-[10px] md:text-xs line-through">{product.price_catalog} AZN</div>
+                          {product.price_catalog !== product.price_sale && product.price_catalog > 0 && (
+                            <div className="text-gray-400 text-[10px] md:text-xs line-through">{formatPrice(product.price_catalog)}</div>
                           )}
-                          <div className="text-lg md:text-xl font-extrabold text-pink-600">{product.price_sale} AZN</div>
+                          <div className="text-lg md:text-xl font-extrabold text-pink-600">{formatPrice(product.price_sale)}</div>
                         </div>
                       </div>
                       

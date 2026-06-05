@@ -1,0 +1,3 @@
+name,sku,description,ingredients,usage,catalogPrice,salePrice,stockPrice,stock,imageUrl,categorySlug,subCategorySlug,childCategorySlug,inStock,isNew,isDiscount,isSuperPrice,isHit
+Kirpik tuşu,12345,Uzadıcı tuş,Tərkib nümunəsi,Kirpiklərə tətbiq edin,12.99,8.99,7.50,20,/images/mascara.png,makiyaj,gozler,kirpik-tusu,true,true,false,false,true
+Şampun,10319,Saç tökülməsinə qarşı şampun,Tərkib nümunəsi,Nəm saça tətbiq edin,8.39,4.00,3.20,15,/images/shampoo.png,qulluq,saclar,sampunlar,true,false,true,false,false
