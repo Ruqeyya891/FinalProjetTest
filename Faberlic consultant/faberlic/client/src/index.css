@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pink-primary: #ec4899;
+  --pink-light: #fdf2f8;
+}
+
+body {
+  background-color: var(--pink-light);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
