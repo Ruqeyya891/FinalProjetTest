@@ -14,12 +14,11 @@ const productSchema = new mongoose.Schema(
 
     price_catalog: {
       type: Number,
-      required: true,
+      default: 0,
     },
 
     price_anbar: {
       type: Number,
-      required: true,
       default: 0,
     },
 
@@ -30,7 +29,7 @@ const productSchema = new mongoose.Schema(
 
     image: {
       type: String,
-      required: true,
+      default: "",
       trim: true,
     },
 
@@ -42,11 +41,11 @@ const productSchema = new mongoose.Schema(
 
     categoryName: {
       type: String,
-      required: true,
+      default: "",
     },
     categorySlug: {
       type: String,
-      required: true,
+      default: "",
     },
     subCategoryName: {
       type: String,

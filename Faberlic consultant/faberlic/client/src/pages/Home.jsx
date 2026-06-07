@@ -1,6 +1,6 @@
-import { ArrowRight, Bot, ShoppingBag, UserPlus, Sparkles, MessageCircle, ChevronLeft, ChevronRight, Heart, Info } from 'lucide-react';
+import { ArrowRight, Bot, ShoppingBag, UserPlus, Sparkles, MessageCircle, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -8,15 +8,29 @@ import { useNavigate } from 'react-router-dom';
 const Home = () => {
   // All images from public/images folder
   const slides = [
-    { id: 1, image: '/images/heroimage.png', alt: 'Faberlic Hero' },
-    { id: 2, image: '/images/hairimage.png', alt: 'Faberlic Hair Products' },
-    { id: 3, image: '/images/parfum.png', alt: 'Faberlic Perfume' },
+    { 
+      id: 1, 
+      image: '/images/heroimage.png', 
+      alt: 'Faberlic Hero'
+    },
+    { 
+      id: 2, 
+      image: '/images/hairimage.png', 
+      alt: 'Faberlic Hair Products'
+    },
+    { 
+      id: 3, 
+      image: '/images/parfum.png', 
+      alt: 'Faberlic Perfume'
+    },
   ];
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [products, setProducts] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const navigate = useNavigate();
+  const imgRefs = useRef([]);
 
   // Auto-slide every 3 seconds
   const nextSlide = useCallback(() => {
@@ -32,9 +46,13 @@ const Home = () => {
   };
 
   useEffect(() => {
-    const interval = setInterval(nextSlide, 3000); // Change slide every 3 seconds
+    const interval = setInterval(nextSlide, 5000); // Change slide every 5 seconds
     return () => clearInterval(interval);
   }, [nextSlide]);
+
+  const handleImageLoad = () => {
+    setIsLoading(false);
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -117,18 +135,27 @@ const Home = () => {
   return (
     <div className="bg-pink-50 min-h-screen">
       {/* Hero Slider Section */}
-      <div className="relative overflow-hidden bg-white">
+      <div className="max-w-[1200px] h-[390px] mx-auto my-4 mb-8 relative overflow-hidden rounded-[12px]">
         {/* Slides */}
         <div 
           className="flex transition-transform duration-700 ease-out"
           style={{ transform: `translateX(-${currentIndex * 100}%)` }}
         >
-          {slides.map((slide) => (
-            <div key={slide.id} className="min-w-full">
+          {slides.map((slide, index) => (
+            <div key={slide.id} className="min-w-full h-full">
+              {/* Skeleton Loader */}
+              {isLoading && (
+                <div className="absolute inset-0 bg-gray-200 animate-pulse"></div>
+              )}
+              
+              {/* Slide Image */}
               <img 
+                ref={(el) => (imgRefs.current[index] = el)}
                 src={slide.image} 
                 alt={slide.alt} 
-                className="w-full h-auto object-contain"
+                className="w-full h-full object-cover object-center"
+                loading="lazy"
+                onLoad={handleImageLoad}
               />
             </div>
           ))}
@@ -137,25 +164,25 @@ const Home = () => {
         {/* Navigation Arrows */}
         <button
           onClick={prevSlide}
-          className="absolute top-1/2 left-4 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 p-3 rounded-full shadow-lg transition-all"
+          className="absolute top-1/2 left-4 -translate-y-1/2 bg-white text-gray-800 p-2 rounded-full shadow-lg hover:bg-pink-50 transition-all z-10"
         >
-          <ChevronLeft size={24} />
+          <ChevronLeft size={20} />
         </button>
         <button
           onClick={nextSlide}
-          className="absolute top-1/2 right-4 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 p-3 rounded-full shadow-lg transition-all"
+          className="absolute top-1/2 right-4 -translate-y-1/2 bg-white text-gray-800 p-2 rounded-full shadow-lg hover:bg-pink-50 transition-all z-10"
         >
-          <ChevronRight size={24} />
+          <ChevronRight size={20} />
         </button>
 
-        {/* Dots Indicator */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3">
+        {/* Dots Indicator - Bottom Left */}
+        <div className="absolute bottom-4 left-4 flex gap-2 z-10">
           {slides.map((_, index) => (
             <button
               key={index}
               onClick={() => goToSlide(index)}
-              className={`w-3 h-3 rounded-full transition-all ${
-                currentIndex === index ? 'bg-pink-500 w-8 rounded' : 'bg-white/70 hover:bg-white'
+              className={`w-2 h-2 rounded-full transition-all ${
+                currentIndex === index ? 'bg-pink-600 w-6' : 'bg-white/70 hover:bg-white'
               }`}
             />
           ))}
