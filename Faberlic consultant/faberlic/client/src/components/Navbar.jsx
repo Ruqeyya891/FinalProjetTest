@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { toast } from 'react-toastify';
 import { categories, slugify } from '../utils/categories';
 
-const Navbar = ({ isAdmin }) => {
+const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -92,6 +92,8 @@ const Navbar = ({ isAdmin }) => {
             <input
               type="text"
               placeholder="Faberlic məhsulları axtarışı"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-gray-50 border border-gray-200 rounded-sm py-2 px-4 pr-10 focus:outline-none focus:border-pink-500 transition-colors text-sm"
             />
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600" size={20} />

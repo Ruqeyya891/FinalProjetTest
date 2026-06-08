@@ -1,12 +1,159 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Heart, ShieldCheck, Truck, ArrowLeft, Star, MessageCircle, Instagram, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShoppingCart, Heart, ShieldCheck, Truck, ArrowLeft, Star, MessageCircle, Instagram, ChevronRight, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 
 // Helper function to format price
 const formatPrice = (price) => {
   return `${parseFloat(price).toFixed(2)} ₼`;
+};
+
+// Helper function to format content with bold and bullets
+const formatContent = (content) => {
+  if (!content) return null;
+  
+  // Split by newlines and filter out empty strings
+  const lines = content.split('\n').filter(line => line.trim() !== '');
+  
+  return lines.map((line, index) => {
+    const trimmedLine = line.trim();
+    
+    // Check if line is a heading (starts with bold markers or is very short and uppercase)
+    const isHeading = trimmedLine.startsWith('**') || (trimmedLine.length < 50 && trimmedLine === trimmedLine.toUpperCase());
+    
+    // Check if line is a bullet point
+    const isBullet = trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*');
+    
+    if (isHeading) {
+      return (
+        <h4 key={index} className="font-bold text-[#1f2a56] mt-4 mb-2 first:mt-0 text-base md:text-lg">
+          {trimmedLine.replace(/\*\*/g, '')}
+        </h4>
+      );
+    }
+    
+    if (isBullet) {
+      return (
+        <div key={index} className="flex items-start gap-3 mb-2 pl-2">
+          <span className="text-[#e6005c] font-bold mt-1">•</span>
+          <span className="text-gray-600">{trimmedLine.replace(/^[•\-\*]\s*/, '')}</span>
+        </div>
+      );
+    }
+    
+    return (
+      <p key={index} className="mb-4 last:mb-0 text-gray-600">
+        {trimmedLine}
+      </p>
+    );
+  });
+};
+
+// Advanced helper for About tab
+const formatAboutContent = (content) => {
+  if (!content) return null;
+
+  const benefitKeywords = ["təmizləyir", "yaradır", "qurutmur", "əhatə edir", "yeniləyir", "hamar edir"];
+  
+  // 1. Extract Shelf Life
+  let shelfLife = "";
+  const shelfLifeMatch = content.match(/Saxlama müddəti:?\s*([^\n\.]+)/i);
+  if (shelfLifeMatch) {
+    shelfLife = shelfLifeMatch[0];
+  }
+
+  // 2. Clean content (remove shelf life from main flow to avoid duplication)
+  let cleanContent = content.replace(shelfLife, '').trim();
+
+  // 3. Split into paragraphs/lines
+  const rawParagraphs = cleanContent.split('\n').filter(p => p.trim().length > 0);
+  
+  // If only one big paragraph, try to split it into sentences for better structure
+  let paragraphs = [];
+  if (rawParagraphs.length === 1 && rawParagraphs[0].length > 200) {
+    // Split by dot followed by space, but keep the dot
+    const sentences = rawParagraphs[0].match(/[^\.!\?]+[\.!\?]+/g) || [rawParagraphs[0]];
+    // Group sentences back into small chunks
+    for (let i = 0; i < sentences.length; i += 2) {
+      paragraphs.push((sentences[i] + (sentences[i+1] || '')).trim());
+    }
+  } else {
+    paragraphs = rawParagraphs;
+  }
+  
+  // 4. Extract Intro
+  const intro = paragraphs[0] || "";
+  const remainingParagraphs = paragraphs.slice(1);
+
+  // 5. Detect Benefits and General text
+  const benefits = [];
+  const generalText = [];
+
+  remainingParagraphs.forEach(p => {
+    const pLower = p.toLowerCase().trim();
+    const isBenefit = benefitKeywords.some(keyword => {
+      // Check if it ends with the keyword (allowing for a dot or space at the end)
+      const regex = new RegExp(`${keyword}[\\.\\s]*$`, 'i');
+      return regex.test(pLower);
+    }) || p.trim().startsWith('•') || p.trim().startsWith('-') || p.trim().startsWith('*');
+    
+    if (isBenefit) {
+      benefits.push(p.trim().replace(/^[•\-\*]\s*/, ''));
+    } else {
+      generalText.push(p.trim());
+    }
+  });
+
+  return (
+    <div className="space-y-10 animate-fadeIn">
+      {/* Intro Card */}
+      {intro && (
+        <div className="bg-white p-6 rounded-2xl border-l-4 border-[#e6005c] shadow-sm">
+          <p className="text-gray-700 text-lg font-medium leading-relaxed italic">
+            "{intro}"
+          </p>
+        </div>
+      )}
+
+      {/* Benefits Section */}
+      {benefits.length > 0 && (
+        <div className="space-y-6">
+          <h3 className="text-xl font-bold text-[#1f2a56] flex items-center gap-2">
+            <Sparkles className="text-[#e6005c]" size={20} />
+            Əsas faydalar
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {benefits.map((benefit, i) => (
+              <div key={i} className="bg-[#fff7fb] border border-[#f5d6e5] rounded-[14px] p-4 md:p-5 flex items-start gap-3 hover:shadow-md transition-shadow">
+                <div className="min-w-[8px] h-[8px] rounded-full bg-[#e6005c] mt-2.5" />
+                <p className="text-gray-700 font-medium leading-snug">{benefit}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* General Text Section */}
+      {generalText.length > 0 && (
+        <div className="space-y-4">
+          {generalText.map((text, i) => (
+            <p key={i} className="text-gray-600 leading-[1.7] text-base">
+              {text}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* Shelf Life Info Box */}
+      {shelfLife && (
+        <div className="inline-flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-5 py-3 text-sm text-gray-500">
+          < ShieldCheck size={18} className="text-green-600" />
+          <span className="font-semibold">{shelfLife}</span>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const ProductDetails = () => {
@@ -17,6 +164,8 @@ const ProductDetails = () => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const [activeTab, setActiveTab] = useState('description');
+
+  const images = product?.images?.length > 0 ? product.images : [product?.image];
 
   useEffect(() => {
     fetchProduct();
@@ -73,7 +222,9 @@ const ProductDetails = () => {
         toast.success(liked ? 'Seçilmişlərə əlavə edildi' : 'Seçilmişlərdən silindi');
       }
     } catch (error) {
-      toast.error('Xəta baş verdi');
+      console.error('Cart add error:', error.response?.data || error.message);
+      const errorMsg = error.response?.data?.error || 'Xəta baş verdi';
+      toast.error(errorMsg);
     }
   };
 
@@ -88,8 +239,6 @@ const ProductDetails = () => {
       <div className="w-12 h-12 border-4 border-[#e6005c] border-t-transparent rounded-full animate-spin"></div>
     </div>
   );
-
-  const images = [product.image, ...(product.images || [])].filter(Boolean);
 
   return (
     <div className="bg-[#fff5fa] min-h-screen py-6">
@@ -188,10 +337,18 @@ const ProductDetails = () => {
                   <span className="text-gray-500 w-16">Artikul:</span>
                   <span className="font-semibold text-[#1f2a56]">{product.sku}</span>
                 </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-gray-500 w-16">Çəki:</span>
-                  <span className="font-semibold text-[#1f2a56]">100 gr</span>
-                </div>
+                {product.weight?.value && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500 w-16">Çəki:</span>
+                    <span className="font-semibold text-[#1f2a56]">{product.weight.value} {product.weight.unit}</span>
+                  </div>
+                )}
+                {product.volume?.value && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500 w-16">Həcm:</span>
+                    <span className="font-semibold text-[#1f2a56]">{product.volume.value} {product.volume.unit}</span>
+                  </div>
+                )}
               </div>
 
               {/* Bullet List */}
@@ -249,58 +406,56 @@ const ProductDetails = () => {
         </div>
 
         {/* Additional Details with Tabs */}
-        <div className="mt-8 bg-white rounded-2xl border border-[#f2d6e3] overflow-hidden">
+        <div className="mt-12 bg-white rounded-2xl border border-[#f2d6e3] shadow-sm overflow-hidden mb-16">
           {/* Tab Headers */}
-          <div className="flex border-b border-[#f2d6e3]">
-            <button
-              onClick={() => setActiveTab('description')}
-              className={`px-6 py-4 text-sm font-semibold transition-all ${
-                activeTab === 'description'
-                  ? 'text-[#e6005c] border-b-2 border-[#e6005c]'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Məhsul Haqqında
-            </button>
-            <button
-              onClick={() => setActiveTab('ingredients')}
-              className={`px-6 py-4 text-sm font-semibold transition-all ${
-                activeTab === 'ingredients'
-                  ? 'text-[#e6005c] border-b-2 border-[#e6005c]'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Tərkibi
-            </button>
-            <button
-              onClick={() => setActiveTab('usage')}
-              className={`px-6 py-4 text-sm font-semibold transition-all ${
-                activeTab === 'usage'
-                  ? 'text-[#e6005c] border-b-2 border-[#e6005c]'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              İstifadə Qaydası
-            </button>
+          <div className="flex border-b border-[#f2d6e3] overflow-x-auto scrollbar-hide bg-gray-50/50">
+            {[
+              { id: 'description', label: 'Məhsul haqqında' },
+              { id: 'ingredients', label: 'Tərkibi' },
+              { id: 'usage', label: 'Tətbiq qaydası' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-8 py-5 text-sm md:text-base font-bold transition-all whitespace-nowrap relative ${
+                  activeTab === tab.id
+                    ? 'text-[#e6005c]'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {tab.label}
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#e6005c]" />
+                )}
+              </button>
+            ))}
           </div>
 
           {/* Tab Content */}
-          <div className="p-6">
-            {activeTab === 'description' && (
-              <p className="text-sm text-gray-600 leading-relaxed">
-                {product.description || 'Məhsul haqqında məlumat əlavə ediləcək.'}
-              </p>
-            )}
-            {activeTab === 'ingredients' && (
-              <p className="text-sm text-gray-600 leading-relaxed">
-                {product.ingredients || 'Tərkib məlumatı təqdim ediləcək.'}
-              </p>
-            )}
-            {activeTab === 'usage' && (
-              <p className="text-sm text-gray-600 leading-relaxed">
-                {product.usage || 'İstifadə qaydası məlumatı təqdim ediləcək.'}
-              </p>
-            )}
+          <div className="p-8 md:p-12 max-w-[900px]">
+            <div className="text-base md:text-[17px] leading-[1.8] font-normal">
+              {activeTab === 'description' && (
+                <div>
+                  {product.description ? formatAboutContent(product.description) : (
+                    <p className="text-gray-400 italic text-center py-10">Məlumat əlavə edilməyib</p>
+                  )}
+                </div>
+              )}
+              {activeTab === 'ingredients' && (
+                <div className="animate-fadeIn">
+                  {product.ingredients ? formatContent(product.ingredients) : (
+                    <p className="text-gray-400 italic text-center py-10">Məlumat əlavə edilməyib</p>
+                  )}
+                </div>
+              )}
+              {activeTab === 'usage' && (
+                <div className="animate-fadeIn">
+                  {product.usage ? formatContent(product.usage) : (
+                    <p className="text-gray-400 italic text-center py-10">Məlumat əlavə edilməyib</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

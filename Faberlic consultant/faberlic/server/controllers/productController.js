@@ -187,13 +187,23 @@ const importProducts = async (req, res) => {
         for (const row of results.data) {
             try {
                 // Map CSV fields to product model
+                const images = (row.imageurl || row.image || row.photo || row.sekil || '').split(',').map(img => img.trim()).filter(img => img);
+                
                 const productData = {
                     name: row.name || row.ad || '',
                     sku: row.sku || row.artikul || row.article || '',
                     description: row.description || row.aciklama || '',
                     ingredients: row.ingredients || row.terkib || '',
                     usage: row.usage || row.istifade || '',
-                    image: row.imageurl || row.image || row.photo || row.sekil || '',
+                    images: images,
+                    weight: {
+                        value: row.weightValue ? parseFloat(row.weightValue) : null,
+                        unit: row.weightUnit || 'q'
+                    },
+                    volume: {
+                        value: row.volumeValue ? parseFloat(row.volumeValue) : null,
+                        unit: row.volumeUnit || 'ml'
+                    },
                     price_catalog: parseFloat(row.catalogprice || row.price_catalog || row.katalogqiymeti || 0),
                     price_sale: parseFloat(row.saleprice || row.price_sale || row.satisqiymeti || 0),
                     price_anbar: parseFloat(row.stockprice || row.anbarprice || row.price_anbar || 0),

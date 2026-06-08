@@ -27,19 +27,30 @@ const productSchema = new mongoose.Schema(
       required: true,
     },
 
-    image: {
-      type: String,
-      default: "",
-      trim: true,
+    images: {
+      type: [String],
+      default: [],
+      validate: [
+        {
+          validator: function(v) {
+            return Array.isArray(v) && v.length > 0;
+          },
+          message: 'Ən azı 1 şəkil məcburidir'
+        }
+      ]
     },
 
-    images: [
-      {
-        type: String,
-      },
-    ],
+    weight: {
+      value: { type: Number, min: 0, default: null },
+      unit: { type: String, enum: ['q', 'kq'], default: 'q' }
+    },
 
-    categoryName: {
+    volume: {
+      value: { type: Number, min: 0, default: null },
+      unit: { type: String, enum: ['ml', 'l'], default: 'ml' }
+    },
+
+    price_catalog: {
       type: String,
       default: "",
     },

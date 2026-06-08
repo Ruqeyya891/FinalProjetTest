@@ -115,7 +115,7 @@ const AdminDashboard = () => {
     sku: '',
     stock: '',
     isActive: true,
-    image: '',
+    images: [''],
     isInStock: true,
     isSuperPrice: false,
     isNew: false,
@@ -128,7 +128,11 @@ const AdminDashboard = () => {
     skinType: '',
     hairType: '',
     ingredients: '',
-    usage: ''
+    usage: '',
+    weightValue: '',
+    weightUnit: 'q',
+    volumeValue: '',
+    volumeUnit: 'ml'
   });
   const [formErrors, setFormErrors] = useState({});
   const [csvFile, setCsvFile] = useState(null);
@@ -416,6 +420,12 @@ const AdminDashboard = () => {
     if (!productForm.categoryName.trim()) errors.categoryName = 'Əsas kateqoriya mütləqdir';
     if (!productForm.subCategoryName.trim()) errors.subCategoryName = 'Alt kateqoriya mütləqdir';
 
+    // Validate images
+    const validImages = productForm.images.filter(img => img.trim() !== '');
+    if (validImages.length === 0) {
+      errors.images = 'Ən azı 1 şəkil mütləqdir';
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -431,7 +441,15 @@ const AdminDashboard = () => {
         ...productForm,
         price_sale: parseFloat(productForm.price_sale) || 0,
         price_catalog: productForm.price_catalog ? parseFloat(productForm.price_catalog) : 0,
-        price_anbar: productForm.price_anbar ? parseFloat(productForm.price_anbar) : 0
+        price_anbar: productForm.price_anbar ? parseFloat(productForm.price_anbar) : 0,
+        weight: {
+          value: productForm.weightValue !== '' ? parseFloat(productForm.weightValue) : null,
+          unit: productForm.weightUnit
+        },
+        volume: {
+          value: productForm.volumeValue !== '' ? parseFloat(productForm.volumeValue) : null,
+          unit: productForm.volumeUnit
+        }
       };
       
       if (editingProduct) {
@@ -445,9 +463,10 @@ const AdminDashboard = () => {
         name: '', description: '', price_catalog: '', price_anbar: '', price_sale: '',
         categoryName: '', categorySlug: '', subCategoryName: '', subCategorySlug: '',
         childCategoryName: '', childCategorySlug: '', sku: '', stock: '', isActive: true,
-        image: '', isInStock: true, isSuperPrice: false, isNew: false, isDiscount: false,
+        images: [''], isInStock: true, isSuperPrice: false, isNew: false, isDiscount: false,
         isPromotion: false, isHit: false, collection: '', productType: '', productEffect: '',
-        skinType: '', hairType: '', ingredients: '', usage: ''
+        skinType: '', hairType: '', ingredients: '', usage: '',
+        weightValue: '', weightUnit: 'q', volumeValue: '', volumeUnit: 'ml'
       });
       fetchProducts();
       toast.success('Məhsul yadda saxlanıldı');
@@ -863,8 +882,16 @@ const AdminDashboard = () => {
                     {products.map(product => (
                       <tr key={product._id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 flex items-center gap-3">
-                          <img src={product.image} className="w-10 h-10 rounded-lg object-cover" />
-                          <div><p className="text-sm font-bold">{product.name}</p><p className="text-xs text-gray-400">SKU: {product.sku}</p></div>
+                          <img src={product.images?.[0] || product.image} className="w-10 h-10 rounded-lg object-cover" />
+                          <div>
+                            <p className="text-sm font-bold">{product.name}</p>
+                            <p className="text-xs text-gray-400">SKU: {product.sku}</p>
+                            <p className="text-[10px] text-gray-400 mt-1">
+                              {product.weight?.value ? `${product.weight.value} ${product.weight.unit}` : ''}
+                              {product.weight?.value && product.volume?.value ? ' / ' : ''}
+                              {product.volume?.value ? `${product.volume.value} ${product.volume.unit}` : ''}
+                            </p>
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-sm">{product.category}</td>
                         <td className="px-6 py-4 text-sm font-bold text-pink-600">{product.price_sale} AZN</td>
@@ -892,7 +919,7 @@ const AdminDashboard = () => {
                         sku: product.sku || '',
                         stock: product.stock || '',
                         isActive: product.isActive !== false,
-                        image: product.image || '',
+                        images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [''],
                         isInStock: product.isInStock !== false,
                         isSuperPrice: product.isSuperPrice === true,
                         isNew: product.isNew === true,
@@ -905,8 +932,12 @@ const AdminDashboard = () => {
                         skinType: product.skinType || '',
                         hairType: product.hairType || '',
                         ingredients: product.ingredients || '',
-                        usage: product.usage || ''
-                      }); 
+                        usage: product.usage || '',
+                        weightValue: product.weight?.value || '',
+                        weightUnit: product.weight?.unit || 'q',
+                        volumeValue: product.volume?.value || '',
+                        volumeUnit: product.volume?.unit || 'ml'
+                    }); 
                       setIsProductModalOpen(true); 
                     }} 
                     className="text-gray-400 hover:text-blue-600"
@@ -1096,6 +1127,52 @@ const AdminDashboard = () => {
                       <input type="number" min="0" placeholder="Stok" value={productForm.stock} onChange={e => setProductForm({...productForm, stock: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" />
                     </div>
 
+                    {/* Weight and Volume */}
+                    <div className="space-y-1">
+                      <label className="text-sm font-semibold text-gray-700">Çəki</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="number" 
+                          min="0" 
+                          step="0.01" 
+                          placeholder="Məs: 100" 
+                          value={productForm.weightValue} 
+                          onChange={e => setProductForm({...productForm, weightValue: e.target.value})} 
+                          className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" 
+                        />
+                        <select 
+                          value={productForm.weightUnit} 
+                          onChange={e => setProductForm({...productForm, weightUnit: e.target.value})} 
+                          className="px-4 py-4 bg-gray-50 rounded-2xl outline-none min-w-[80px]"
+                        >
+                          <option value="q">q</option>
+                          <option value="kq">kq</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-semibold text-gray-700">Həcm</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="number" 
+                          min="0" 
+                          step="0.01" 
+                          placeholder="Məs: 250" 
+                          value={productForm.volumeValue} 
+                          onChange={e => setProductForm({...productForm, volumeValue: e.target.value})} 
+                          className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" 
+                        />
+                        <select 
+                          value={productForm.volumeUnit} 
+                          onChange={e => setProductForm({...productForm, volumeUnit: e.target.value})} 
+                          className="px-4 py-4 bg-gray-50 rounded-2xl outline-none min-w-[80px]"
+                        >
+                          <option value="ml">ml</option>
+                          <option value="l">l</option>
+                        </select>
+                      </div>
+                    </div>
+
                     {/* Textareas - Description, Ingredients, Usage */}
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-sm font-semibold text-gray-700">Məhsul Haqqında / Ətraflı Təsvir</label>
@@ -1110,10 +1187,45 @@ const AdminDashboard = () => {
                       <textarea placeholder="Məhsulun istifadə qaydası" value={productForm.usage} onChange={e => setProductForm({...productForm, usage: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" rows="3" />
                     </div>
 
-                    {/* Image URL */}
-                    <div className="md:col-span-2 space-y-1">
-                      <label className="text-sm font-semibold text-gray-700">Şəkil URL</label>
-                      <input placeholder="Şəkil URL" value={productForm.image} onChange={e => setProductForm({...productForm, image: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" />
+                    {/* Multiple Images URL */}
+                    <div className="md:col-span-2 space-y-4">
+                      <label className="text-sm font-semibold text-gray-700">Məhsul Şəkilləri (URL) *</label>
+                      <div className="grid grid-cols-1 gap-4">
+                        {productForm.images.map((img, index) => (
+                          <div key={index} className="flex gap-2">
+                            <input 
+                              placeholder={`Şəkil ${index + 1} URL`} 
+                              value={img} 
+                              onChange={e => {
+                                const newImages = [...productForm.images];
+                                newImages[index] = e.target.value;
+                                setProductForm({...productForm, images: newImages});
+                              }} 
+                              className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none flex-grow ${formErrors.images ? 'border border-red-500' : ''}`} 
+                            />
+                            {productForm.images.length > 1 && (
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  const newImages = productForm.images.filter((_, i) => i !== index);
+                                  setProductForm({...productForm, images: newImages});
+                                }}
+                                className="px-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition-all"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => setProductForm({...productForm, images: [...productForm.images, '']})}
+                        className="flex items-center gap-2 px-6 py-3 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-all"
+                      >
+                        <Plus size={20} /> + Daha çox şəkil əlavə et
+                      </button>
+                      {formErrors.images && <p className="text-red-500 text-xs mt-1">{formErrors.images}</p>}
                     </div>
 
                     {/* Boolean Filters */}

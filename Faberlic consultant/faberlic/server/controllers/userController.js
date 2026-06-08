@@ -1,6 +1,8 @@
 const User = require('../models/User');
+const Product = require('../models/Product');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const mongoose = require('mongoose');
 
 // Favorites (Note: Currently not in User model, needs adjustment if required)
 const toggleFavorite = async (req, res) => {
@@ -40,48 +42,88 @@ const getFavorites = async (req, res) => {
     }
 };
 
-// Cart (Note: Currently not in User model, needs adjustment if required)
+// Cart
 const addToCart = async (req, res) => {
     try {
+        console.log("Cart add request body:", req.body);
         const { productId, quantity } = req.body;
         
+        // 1. productId validation
         if (!productId) {
             return res.status(400).json({ success: false, error: 'Məhsul ID göndərilməyib' });
         }
 
-        if (!req.user || !req.user._id) {
-            return res.status(401).json({ success: false, error: 'İstifadəçi ID tapılmadı. Yenidən giriş edin.' });
+        // 5. Valid MongoDB ObjectId check
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return res.status(400).json({ success: false, error: 'Invalid productId' });
         }
 
-        const user = await User.findById(req.user._id);
+        // 8. User authentication check
+        if (!req.user || (!req.user._id && !req.user.id)) {
+            return res.status(401).json({ success: false, error: 'User not authenticated' });
+        }
+
+        const userId = req.user._id || req.user.id;
+
+        // 6. Product existence check
+        const product = await Product.findById(productId);
+        if (!product) {
+            return res.status(404).json({ success: false, error: 'Product not found' });
+        }
+
+        const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ success: false, error: 'İstifadəçi bazada tapılmadı' });
         }
 
-        // Initialize cart if it doesn't exist
+        // 9. Initialize cart if it doesn't exist
         if (!user.cart) user.cart = [];
 
-        // Convert productId to string for comparison
+        // 10. Add or update logic
         const targetId = productId.toString();
-
-        // Check if product already exists in cart
-        const cartItemIndex = user.cart.findIndex(item => 
-            item.product && item.product.toString() === targetId
-        );
-
-        if (cartItemIndex > -1) {
-            user.cart[cartItemIndex].quantity += (Number(quantity) || 1);
-        } else {
-            user.cart.push({ product: productId, quantity: Number(quantity) || 1 });
+        
+        // Ensure user.cart is an array and items have product field
+        if (!Array.isArray(user.cart)) {
+            user.cart = [];
         }
 
-        await user.save();
+        const cartItemIndex = user.cart.findIndex(item => 
+            item && item.product && item.product.toString() === targetId
+        );
+
+        const qtyToAdd = Number(quantity) || 1;
+
+        if (cartItemIndex > -1) {
+            user.cart[cartItemIndex].quantity += qtyToAdd;
+        } else {
+            user.cart.push({ product: productId, quantity: qtyToAdd });
+        }
+
+        console.log(`Saving user ${userId} with ${user.cart.length} items in cart`);
         
-        // Return success and let frontend fetch the full cart if needed
-        res.status(200).json({ success: true, cart: user.cart });
+        try {
+            await user.save();
+        } catch (saveError) {
+            console.error("User save error during cart add:", saveError);
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Səbət yadda saxlanılarkən xəta: ' + saveError.message 
+            });
+        }
+        
+        // 13. Successful response
+        return res.status(200).json({ 
+            success: true, 
+            message: "Məhsul səbətə əlavə edildi", 
+            cart: user.cart 
+        });
     } catch (error) {
-        console.error('--- ADD TO CART ERROR ---', error);
-        res.status(500).json({ success: false, error: 'Server xətası: ' + error.message });
+        // 2 & 11. Error handling with logging
+        console.error("Cart add error:", error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Server xətası: ' + error.message 
+        });
     }
 };
 

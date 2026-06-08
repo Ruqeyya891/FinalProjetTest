@@ -103,13 +103,23 @@ const formatPrice = (price) => {
   return `${parseFloat(price).toFixed(2)} ₼`;
 };
 
-const Products = () => {
+const normalize = (str) => 
+  str?.toLowerCase() 
+    .replaceAll("ə", "e") 
+    .replaceAll("ü", "u") 
+    .replaceAll("ö", "o") 
+    .replaceAll("ğ", "g") 
+    .replaceAll("ı", "i") 
+    .replaceAll("ş", "s") 
+    .replaceAll("ç", "c") 
+    .replace(/\s+/g, "-");
+
+const Products = ({ searchTerm }) => {
   // ALL HOOKS MUST BE AT THE TOP - NO CONDITIONAL BEFORE THEM!
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState([]);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
@@ -223,13 +233,60 @@ const Products = () => {
         navigate('/cart');
       }
     } catch (error) {
-      toast.error('Xəta baş verdi');
+      console.error(error.response?.data || error.message);
+      const errorMsg = error.response?.data?.error || 'Xəta baş verdi';
+      toast.error(errorMsg);
     }
   };
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProducts = products.filter(product => {
+    // 1. Search term filter
+    const q = searchTerm?.toLowerCase().trim();
+    const matchesSearch = !q || (
+      product.name?.toLowerCase().includes(q) || 
+      product.sku?.toString().toLowerCase().includes(q) || 
+      product.article?.toString().toLowerCase().includes(q) ||
+      product.artikul?.toString().toLowerCase().includes(q)
+    );
+
+    // 2. Category/Subcategory/ChildCategory filter
+    const productCategory = product.categorySlug || normalize(product.category);
+    const productSubCategory = product.subCategorySlug || normalize(product.subcategory || product.subCategory);
+    const productChildCategory = product.childCategorySlug || normalize(product.childCategory);
+
+    if (mainCategorySlug && productCategory !== mainCategorySlug) return false;
+    if (subCategorySlug && productSubCategory !== subCategorySlug) return false;
+    if (childCategorySlug && productChildCategory !== childCategorySlug) return false;
+
+    return matchesSearch;
+  });
+
+  useEffect(() => {
+    if (products.length > 0) {
+      console.log("--- FILTER DEBUG START ---");
+      console.table(products.map(p => ({ 
+        name: p.name, 
+        sku: p.sku, 
+        categorySlug: p.categorySlug, 
+        subCategorySlug: p.subCategorySlug, 
+        childCategorySlug: p.childCategorySlug, 
+        category: p.category, 
+        subcategory: p.subcategory || p.subCategory, 
+        childCategory: p.childCategory 
+      })));
+
+      const shampoo = products.find(p => 
+        p.name?.toLowerCase().includes("şampun") || 
+        p.name?.toLowerCase().includes("sampun") || 
+        p.sku?.toString() === "10319" 
+      );
+      console.log("SHAMPOO PRODUCT FOUND:", shampoo);
+      
+      console.log("URL SLUGS:", { mainCategorySlug, subCategorySlug, childCategorySlug });
+      console.log("FILTERED COUNT:", filteredProducts.length);
+      console.log("--- FILTER DEBUG END ---");
+    }
+  }, [mainCategorySlug, subCategorySlug, childCategorySlug, products, filteredProducts, searchTerm]);
 
 
 
@@ -280,8 +337,14 @@ const Products = () => {
             <input 
               type="text" 
               placeholder="Məhsul axtar..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchTerm}
+              onChange={(e) => {
+                // We are already using global searchTerm from props
+                // If this page's input is used, it should also update the global state
+                // Since App.jsx passes setSearchTerm to Navbar, we can't directly call it here
+                // but Navbar is always visible. However, for better UX:
+                window.dispatchEvent(new CustomEvent('globalSearch', { detail: e.target.value }));
+              }}
               className="w-full pl-12 pr-4 py-3 md:py-4 bg-white border border-pink-100 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:border-transparent shadow-sm outline-none transition-all text-sm"
             />
           </div>
@@ -293,7 +356,7 @@ const Products = () => {
             <div className="flex flex-wrap gap-2 md:gap-3 overflow-x-auto pb-2">
               <button
                 onClick={() => {
-                  navigate(`/products?category=${currentMainCategory.slug}`);
+                  navigate(`/products?category=${mainCategorySlug}`);
                 }}
                 className={`px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-semibold text-sm transition-all flex-shrink-0 ${
                   !subCategorySlug 
@@ -307,7 +370,7 @@ const Products = () => {
                 <button
                   key={subCat.slug}
                   onClick={() => {
-                    navigate(`/products?category=${currentMainCategory.slug}&subcategory=${subCat.slug}`);
+                    navigate(`/products?category=${mainCategorySlug}&subcategory=${subCat.slug}`);
                   }}
                   className={`px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-semibold text-sm transition-all flex-shrink-0 ${
                     subCategorySlug === subCat.slug
@@ -328,7 +391,7 @@ const Products = () => {
             <div className="flex flex-wrap gap-2 md:gap-3 overflow-x-auto pb-2">
               <button
                 onClick={() => {
-                  navigate(`/products?category=${currentMainCategory.slug}&subcategory=${currentSubCategory.slug}`);
+                  navigate(`/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}`);
                 }}
                 className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl font-medium text-xs md:text-sm transition-all flex-shrink-0 ${
                   !childCategorySlug 
@@ -342,7 +405,7 @@ const Products = () => {
                 <button
                   key={childCat.slug}
                   onClick={() => {
-                    navigate(`/products?category=${currentMainCategory.slug}&subcategory=${currentSubCategory.slug}&childCategory=${childCat.slug}`);
+                    navigate(`/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}&childCategory=${childCat.slug}`);
                   }}
                   className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl font-medium text-xs md:text-sm transition-all flex-shrink-0 ${
                     childCategorySlug === childCat.slug
@@ -371,34 +434,9 @@ const Products = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 lg:gap-12">
+        <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
           {/* Sidebar Filters - Desktop Only */}
-          <div className="hidden lg:block lg:col-span-1 space-y-6">
-            {/* Quick Filters */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-pink-100">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Axtarışlar</h3>
-              <div className="space-y-3">
-                {[
-                  { label: 'Anbarda var', key: 'isInStock' },
-                  { label: 'Superqiymət', key: 'isSuperPrice' },
-                  { label: 'Yeniliklər', key: 'isNew' },
-                  { label: 'Endirim', key: 'isDiscount' },
-                  { label: 'Aksiyalar', key: 'isPromotion' },
-                  { label: 'Hit', key: 'isHit' }
-                ].map(filter => (
-                  <label key={filter.key} className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={activeFilters[filter.key]} 
-                      onChange={(e) => setActiveFilters({...activeFilters, [filter.key]: e.target.checked})} 
-                      className="w-4 h-4 text-pink-600 rounded border-gray-300" 
-                    />
-                    <span className="text-gray-700 text-sm">{filter.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
+          <div className="hidden lg:block w-full lg:w-64 space-y-6">
             {/* Price Range */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-pink-100">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Qiymət, ₼</h3>
@@ -497,7 +535,7 @@ const Products = () => {
           </div>
 
           {/* Product Grid */}
-          <div className="lg:col-span-3">
+          <div className="flex-1">
             {filteredProducts.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-8">
                 {filteredProducts.map(product => (
@@ -508,7 +546,7 @@ const Products = () => {
                   >
                     <div className="relative aspect-square overflow-hidden bg-pink-50">
                       <img 
-                        src={product.image} 
+                        src={product.images?.[0] || product.image} 
                         alt={product.name} 
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
@@ -603,31 +641,6 @@ const Products = () => {
                 >
                   <X size={24} />
                 </button>
-              </div>
-
-              {/* Quick Filters */}
-              <div className="mb-8">
-                <h4 className="text-lg font-bold text-gray-900 mb-4">Axtarışlar</h4>
-                <div className="space-y-3">
-                  {[
-                    { label: 'Anbarda var', key: 'isInStock' },
-                    { label: 'Superqiymət', key: 'isSuperPrice' },
-                    { label: 'Yeniliklər', key: 'isNew' },
-                    { label: 'Endirim', key: 'isDiscount' },
-                    { label: 'Aksiyalar', key: 'isPromotion' },
-                    { label: 'Hit', key: 'isHit' }
-                  ].map(filter => (
-                    <label key={filter.key} className="flex items-center gap-3 cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={activeFilters[filter.key]} 
-                        onChange={(e) => setActiveFilters({...activeFilters, [filter.key]: e.target.checked})} 
-                        className="w-5 h-5 text-pink-600 rounded border-gray-300" 
-                      />
-                      <span className="text-gray-700">{filter.label}</span>
-                    </label>
-                  ))}
-                </div>
               </div>
 
               {/* Price Range */}

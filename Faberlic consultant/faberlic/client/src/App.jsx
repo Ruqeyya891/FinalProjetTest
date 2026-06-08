@@ -43,6 +43,15 @@ const AdminRoute = ({ children }) => {
 
 function App() {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    const handleGlobalSearch = (e) => {
+      setSearchTerm(e.detail);
+    };
+    window.addEventListener('globalSearch', handleGlobalSearch);
+    return () => window.removeEventListener('globalSearch', handleGlobalSearch);
+  }, []);
 
   useEffect(() => {
     const checkAdmin = () => {
@@ -74,11 +83,11 @@ function App() {
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div className="min-h-screen flex flex-col bg-pink-50">
-        <Navbar isAdmin={isAdmin} />
+        <Navbar isAdmin={isAdmin} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
         <main className="flex-grow">
           <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/products" element={<Products />} />
+            <Route path="/" element={<Home searchTerm={searchTerm} />} />
+            <Route path="/products" element={<Products searchTerm={searchTerm} />} />
             <Route path="/product/:id" element={<ProductDetails />} />
             <Route path="/dashboard" element={<UserDashboard />} />
             <Route path="/ai-advisor" element={<AIAdvisor />} />
