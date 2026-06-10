@@ -1,21 +1,112 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Bot, LayoutDashboard, Search, BookOpen, LogOut, Menu, X } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { categories, slugify } from '../utils/categories';
+import axios from 'axios';
 
 const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileCategoryOpen, setMobileCategoryOpen] = useState(null);
+  const [searchResults, setSearchResults] = useState({ series: [], products: [] });
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
   const token = localStorage.getItem('token');
+
+  // Fetch search results when searchTerm changes
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (!searchTerm || searchTerm.trim() === '') {
+        setSearchResults({ series: [], products: [] });
+        setShowDropdown(false);
+        return;
+      }
+
+      try {
+        const response = await axios.get('http://127.0.0.1:5000/api/products', {
+          params: { search: searchTerm }
+        });
+        const products = response.data;
+
+        // Extract unique series from products
+        const seriesMap = new Map();
+        products.forEach(product => {
+          if (product.seriesName) {
+            seriesMap.set(product.seriesSlug || slugify(product.seriesName), product.seriesName);
+          } else if (product.collection) {
+            seriesMap.set(slugify(product.collection), product.collection);
+          }
+        });
+
+        const series = Array.from(seriesMap, ([slug, name]) => ({ slug, name }));
+
+        setSearchResults({
+          series,
+          products: products.slice(0, 10) // Limit to 10 products
+        });
+        setShowDropdown(true);
+      } catch (error) {
+        console.error('Search fetch error:', error);
+      }
+    };
+
+    // Debounce the search
+    const timer = setTimeout(fetchResults, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     toast.success('Çıxış edildi');
     navigate('/login');
     window.dispatchEvent(new Event('storage'));
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (!searchTerm.trim()) return;
+
+    // Check if search matches a product SKU exactly
+    const exactProductMatch = searchResults.products.find(
+      p => p.sku && p.sku.toLowerCase() === searchTerm.toLowerCase()
+    );
+    if (exactProductMatch) {
+      navigate(`/product/${exactProductMatch._id}`);
+      setShowDropdown(false);
+      return;
+    }
+
+    // Check if search matches a series exactly
+    const exactSeriesMatch = searchResults.series.find(
+      s => s.name.toLowerCase() === searchTerm.toLowerCase()
+    );
+    if (exactSeriesMatch) {
+      navigate(`/products?series=${exactSeriesMatch.slug}`);
+      setShowDropdown(false);
+      return;
+    }
+
+    // Otherwise, go to products page with search query
+    navigate(`/products?search=${encodeURIComponent(searchTerm)}`);
+    setShowDropdown(false);
+  };
+
+  const clearSearch = () => {
+    setSearchTerm('');
+    setShowDropdown(false);
   };
 
   return (
@@ -86,18 +177,105 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
           </div>
         </div>
 
-        {/* Search Bar - Mobile & Desktop */}
-        <div className="mt-4 lg:mt-0 lg:max-w-2xl">
-          <div className="relative group">
+        {/* Search Bar - Mobile & Desktop with Dropdown */}
+        <div className="mt-4 lg:mt-0 lg:max-w-2xl relative" ref={dropdownRef}>
+          <form onSubmit={handleSearchSubmit} className="relative group">
             <input
               type="text"
               placeholder="Faberlic məhsulları axtarışı"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-sm py-2 px-4 pr-10 focus:outline-none focus:border-pink-500 transition-colors text-sm"
+              onFocus={() => searchTerm && setShowDropdown(true)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-sm py-2 px-4 pr-20 focus:outline-none focus:border-pink-500 transition-colors text-sm"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-pink-600"
+              >
+                <X size={16} />
+              </button>
+            )}
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600" size={20} />
-          </div>
+          </form>
+
+          {/* Search Dropdown */}
+          {showDropdown && (
+            <div className="absolute top-full left-0 right-0 bg-white shadow-lg border border-gray-200 rounded-b-lg max-h-[360px] overflow-y-auto z-50">
+              {/* Series Section */}
+              {searchResults.series.length > 0 && (
+                <div className="border-b border-gray-100">
+                  <div className="px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wide">
+                    Seriyalar
+                  </div>
+                  {searchResults.series.map((series) => (
+                    <Link
+                      key={series.slug}
+                      to={`/products?series=${series.slug}`}
+                      onClick={() => {
+                        setShowDropdown(false);
+                        setSearchTerm('');
+                      }}
+                      className="block px-4 py-2 hover:bg-pink-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
+                          <Search size={14} className="text-pink-600" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-800">{series.name}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+
+              {/* Products Section */}
+              {searchResults.products.length > 0 && (
+                <div>
+                  <div className="px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wide">
+                    Məhsullar
+                  </div>
+                  {searchResults.products.map((product) => (
+                    <Link
+                      key={product._id}
+                      to={`/product/${product._id}`}
+                      onClick={() => {
+                        setShowDropdown(false);
+                        setSearchTerm('');
+                      }}
+                      className="block px-4 py-3 hover:bg-pink-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={product.images?.[0] || product.image}
+                          alt={product.name}
+                          className="w-12 h-12 object-contain bg-gray-50 rounded"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{product.name}</p>
+                          <p className="text-xs text-gray-500">{product.sku}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-pink-600">
+                            {parseFloat(product.price_sale).toFixed(2)} ₼
+                          </p>
+                        </div>
+                        <ShoppingCart size={16} className="text-gray-400" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+
+              {/* No Results */}
+              {searchResults.series.length === 0 && searchResults.products.length === 0 && (
+                <div className="px-4 py-6 text-center text-gray-500">
+                  Heç bir nəticə tapılmadı
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -105,6 +283,14 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
       <div className="border-t border-gray-100 hidden lg:block">
         <div className="max-w-7xl mx-auto px-4">
           <ul className="flex justify-between items-center h-12">
+            <li className="relative h-full flex items-center">
+              <Link
+                to="/products"
+                className="text-[10px] xl:text-[11px] font-bold tracking-wider text-pink-600 hover:text-pink-700 h-full flex items-center px-1 xl:px-2 transition-colors"
+              >
+                BÜTÜN MƏHSULLAR
+              </Link>
+            </li>
             {categories.map((cat) => (
               <li
                 key={cat.name}
@@ -205,6 +391,13 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
             {/* Mobile Categories */}
             <div className="space-y-2">
               <h3 className="font-bold text-gray-900">Kateqoriyalar</h3>
+              <Link 
+                to="/products" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full block py-2 text-left text-sm font-bold text-pink-600"
+              >
+                Bütün Məhsullar
+              </Link>
               {categories.map((cat) => (
                 <div key={cat.name} className="border-b border-gray-100 pb-2">
                   <button

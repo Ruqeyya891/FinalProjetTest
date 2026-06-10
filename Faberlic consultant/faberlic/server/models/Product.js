@@ -84,6 +84,8 @@ const productSchema = new mongoose.Schema(
     isHit: { type: Boolean, default: false }, // HİT
     
     collection: { type: String, default: "" }, // Seriya, Kolleksiya
+    seriesName: { type: String, default: "" }, // Seriya adı
+    seriesSlug: { type: String, default: "" }, // Seriya slug
     productType: { type: String, default: "" }, // Məhsulun növü
     productEffect: { type: String, default: "" }, // Məhsulun təsiri
     skinType: { type: String, default: "" }, // Dərinin tipi
@@ -120,6 +122,11 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    status: {
+      type: String,
+      enum: ['active', 'inactive', 'out_of_stock'],
+      default: 'active',
+    },
     sku: {
       type: String,
       unique: true,
@@ -131,5 +138,28 @@ const productSchema = new mongoose.Schema(
     versionKey: false,
   }
 );
+
+// Pre-save middleware: sync isActive with status for backward compatibility
+productSchema.pre('save', function(next) {
+  if (this.status === 'active') {
+    this.isActive = true;
+  } else {
+    this.isActive = false;
+  }
+  next();
+});
+
+// Pre-update middleware: sync isActive with status for backward compatibility
+productSchema.pre('findOneAndUpdate', function(next) {
+  const update = this.getUpdate();
+  if (update.status !== undefined) {
+    if (update.status === 'active') {
+      update.isActive = true;
+    } else {
+      update.isActive = false;
+    }
+  }
+  next();
+});
 
 module.exports = mongoose.model("Product", productSchema);

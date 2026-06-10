@@ -100,6 +100,8 @@ const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState({ id: null, type: null });
   const [productForm, setProductForm] = useState({
     name: '',
     description: '',
@@ -115,6 +117,7 @@ const AdminDashboard = () => {
     sku: '',
     stock: '',
     isActive: true,
+    status: 'active',
     images: [''],
     isInStock: true,
     isSuperPrice: false,
@@ -123,6 +126,8 @@ const AdminDashboard = () => {
     isPromotion: false,
     isHit: false,
     collection: '',
+    seriesName: '',
+    seriesSlug: '',
     productType: '',
     productEffect: '',
     skinType: '',
@@ -463,8 +468,9 @@ const AdminDashboard = () => {
         name: '', description: '', price_catalog: '', price_anbar: '', price_sale: '',
         categoryName: '', categorySlug: '', subCategoryName: '', subCategorySlug: '',
         childCategoryName: '', childCategorySlug: '', sku: '', stock: '', isActive: true,
+        status: 'active',
         images: [''], isInStock: true, isSuperPrice: false, isNew: false, isDiscount: false,
-        isPromotion: false, isHit: false, collection: '', productType: '', productEffect: '',
+        isPromotion: false, isHit: false, collection: '', seriesName: '', seriesSlug: '', productType: '', productEffect: '',
         skinType: '', hairType: '', ingredients: '', usage: '',
         weightValue: '', weightUnit: 'q', volumeValue: '', volumeUnit: 'ml'
       });
@@ -476,22 +482,21 @@ const AdminDashboard = () => {
     }
   };
 
-  const toggleProductStatus = async (product) => {
+  const updateProductStatus = async (productId, newStatus) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`http://127.0.0.1:5000/api/products/${product._id}`, {
-        isActive: !product.isActive
+      await axios.put(`http://127.0.0.1:5000/api/products/${productId}`, {
+        status: newStatus
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchProducts();
     } catch (error) {
-      console.error('Error toggling status:', error);
+      console.error('Error updating status:', error);
     }
   };
 
   const deleteProduct = async (id) => {
-    if (!window.confirm('Bu məhsulu silmək istədiyinizə əminsiniz?')) return;
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`http://127.0.0.1:5000/api/products/${id}`, {
@@ -528,7 +533,6 @@ const AdminDashboard = () => {
   };
 
   const deleteCatalog = async (id) => {
-    if (!window.confirm('Bu kataloqu silmək istədiyinizə əminsiniz?')) return;
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`http://127.0.0.1:5000/api/catalogs/${id}`, {
@@ -539,6 +543,16 @@ const AdminDashboard = () => {
     } catch (error) {
       toast.error('Xəta baş verdi');
     }
+  };
+
+  const confirmDelete = async () => {
+    if (itemToDelete.type === 'product') {
+      await deleteProduct(itemToDelete.id);
+    } else if (itemToDelete.type === 'catalog') {
+      await deleteCatalog(itemToDelete.id);
+    }
+    setIsDeleteModalOpen(false);
+    setItemToDelete({ id: null, type: null });
   };
 
   const fetchActiveChats = async () => {
@@ -804,8 +818,8 @@ const AdminDashboard = () => {
             <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
               <h2 className="text-2xl font-bold text-gray-900">Məhsul İdarəetməsi</h2>
               <div className="flex flex-col md:flex-row gap-4">
-                {/* CSV Import */}
-                <form onSubmit={handleImportCSV} className="flex items-center gap-2">
+                {/* CSV Import hidden for now - if needed, create separate tab */}
+                {/* <form onSubmit={handleImportCSV} className="flex items-center gap-2">
                   <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-xl cursor-pointer hover:bg-gray-200 transition-all">
                     <FileText size={18} />
                     {csvFile ? csvFile.name : 'CSV Seç'}
@@ -823,7 +837,7 @@ const AdminDashboard = () => {
                   >
                     {importing ? 'Import olunur...' : 'Import Et'}
                   </button>
-                </form>
+                </form> */}
 
                 {/* New Product Button */}
                 <button onClick={() => { 
@@ -843,14 +857,17 @@ const AdminDashboard = () => {
                     sku: '', 
                     stock: '', 
                     isActive: true, 
-                    image: '', 
+                    status: 'active',
+                    images: [''], 
                     isInStock: true, 
                     isSuperPrice: false, 
                     isNew: false, 
                     isDiscount: false, 
                     isPromotion: false, 
                     isHit: false, 
-                    collection: '', 
+                    collection: '',
+                    seriesName: '',
+                    seriesSlug: '', 
                     productType: '', 
                     productEffect: '', 
                     skinType: '', 
@@ -865,86 +882,129 @@ const AdminDashboard = () => {
                 </button>
               </div>
             </div>
-            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Məhsul</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Kateqoriya</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Qiymət</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Stok</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Əməliyyatlar</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Məhsul</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Kateqoriya</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Qiymət</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Stok</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Əməliyyatlar</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-gray-100">
                     {products.map(product => (
-                      <tr key={product._id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 flex items-center gap-3">
-                          <img src={product.images?.[0] || product.image} className="w-10 h-10 rounded-lg object-cover" />
-                          <div>
-                            <p className="text-sm font-bold">{product.name}</p>
-                            <p className="text-xs text-gray-400">SKU: {product.sku}</p>
-                            <p className="text-[10px] text-gray-400 mt-1">
-                              {product.weight?.value ? `${product.weight.value} ${product.weight.unit}` : ''}
-                              {product.weight?.value && product.volume?.value ? ' / ' : ''}
-                              {product.volume?.value ? `${product.volume.value} ${product.volume.unit}` : ''}
-                            </p>
+                      <tr key={product._id} className="hover:bg-pink-50/30 transition-colors">
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-4">
+                            <img 
+                              src={product.images?.[0] || product.image} 
+                              alt={product.name} 
+                              className="w-12 h-12 rounded-xl object-cover bg-gray-50 border border-gray-100"
+                            />
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900 line-clamp-1">{product.name}</p>
+                              <p className="text-xs text-gray-500">SKU: {product.sku}</p>
+                              <div className="flex gap-2 mt-1">
+                                {product.weight?.value && (
+                                  <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
+                                    {product.weight.value} {product.weight.unit}
+                                  </span>
+                                )}
+                                {product.volume?.value && (
+                                  <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
+                                    {product.volume.value} {product.volume.unit}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm">{product.category}</td>
-                        <td className="px-6 py-4 text-sm font-bold text-pink-600">{product.price_sale} AZN</td>
-                        <td className="px-6 py-4 text-sm">{product.stock}</td>
-                        <td className="px-6 py-4">
-                          <button onClick={() => toggleProductStatus(product)} className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${product.isActive ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{product.isActive ? 'Aktiv' : 'Passiv'}</button>
+                        <td className="px-6 py-5 text-sm text-gray-700">
+                          {product.categoryName || product.category}
                         </td>
-                        <td className="px-6 py-4 flex gap-2">
-                          <button 
-                    onClick={() => { 
-                      setEditingProduct(product); 
-                      // Initialize form with product data, falling back to defaults
-                      setProductForm({
-                        name: product.name || '',
-                        description: product.description || '',
-                        price_catalog: product.price_catalog || '',
-                        price_anbar: product.price_anbar || '',
-                        price_sale: product.price_sale || '',
-                        categoryName: product.categoryName || product.category || '',
-                        categorySlug: product.categorySlug || '',
-                        subCategoryName: product.subCategoryName || '',
-                        subCategorySlug: product.subCategorySlug || '',
-                        childCategoryName: product.childCategoryName || '',
-                        childCategorySlug: product.childCategorySlug || '',
-                        sku: product.sku || '',
-                        stock: product.stock || '',
-                        isActive: product.isActive !== false,
-                        images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [''],
-                        isInStock: product.isInStock !== false,
-                        isSuperPrice: product.isSuperPrice === true,
-                        isNew: product.isNew === true,
-                        isDiscount: product.isDiscount === true,
-                        isPromotion: product.isPromotion === true,
-                        isHit: product.isHit === true,
-                        collection: product.collection || '',
-                        productType: product.productType || '',
-                        productEffect: product.productEffect || '',
-                        skinType: product.skinType || '',
-                        hairType: product.hairType || '',
-                        ingredients: product.ingredients || '',
-                        usage: product.usage || '',
-                        weightValue: product.weight?.value || '',
-                        weightUnit: product.weight?.unit || 'q',
-                        volumeValue: product.volume?.value || '',
-                        volumeUnit: product.volume?.unit || 'ml'
-                    }); 
-                      setIsProductModalOpen(true); 
-                    }} 
-                    className="text-gray-400 hover:text-blue-600"
-                  >
-                    <Edit3 size={18} />
-                  </button>
-                          <button onClick={() => deleteProduct(product._id)} className="text-gray-400 hover:text-red-600"><Trash2 size={18} /></button>
+                        <td className="px-6 py-5 text-sm font-extrabold text-pink-600">
+                          {product.price_sale} AZN
+                        </td>
+                        <td className="px-6 py-5 text-sm text-gray-700">
+                          {product.stock}
+                        </td>
+                        <td className="px-6 py-5">
+                          <select 
+                            value={product.status || (product.isActive ? 'active' : 'inactive')} 
+                            onChange={(e) => updateProductStatus(product._id, e.target.value)}
+                            className={`px-3 py-2 rounded-lg text-xs font-bold uppercase border-none outline-none cursor-pointer transition-colors ${
+                              product.status === 'active' || product.isActive ? 'bg-green-100 text-green-700' : 
+                              product.status === 'inactive' ? 'bg-gray-100 text-gray-700' : 
+                              'bg-orange-100 text-orange-700'
+                            }`}
+                          >
+                            <option value="active">Aktiv</option>
+                            <option value="inactive">Passiv</option>
+                            <option value="out_of_stock">Stokda yoxdur</option>
+                          </select>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={() => { 
+                                setEditingProduct(product); 
+                                setProductForm({
+                                  name: product.name || '',
+                                  description: product.description || '',
+                                  price_catalog: product.price_catalog || '',
+                                  price_anbar: product.price_anbar || '',
+                                  price_sale: product.price_sale || '',
+                                  categoryName: product.categoryName || product.category || '',
+                                  categorySlug: product.categorySlug || '',
+                                  subCategoryName: product.subCategoryName || '',
+                                  subCategorySlug: product.subCategorySlug || '',
+                                  childCategoryName: product.childCategoryName || '',
+                                  childCategorySlug: product.childCategorySlug || '',
+                                  sku: product.sku || '',
+                                  stock: product.stock || '',
+                                  isActive: product.isActive !== false,
+                                  status: product.status || (product.isActive ? 'active' : 'inactive'),
+                                  images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [''],
+                                  isInStock: product.isInStock !== false,
+                                  isSuperPrice: product.isSuperPrice === true,
+                                  isNew: product.isNew === true,
+                                  isDiscount: product.isDiscount === true,
+                                  isPromotion: product.isPromotion === true,
+                                  isHit: product.isHit === true,
+                                  collection: product.collection || '',
+                                  seriesName: product.seriesName || '',
+                                  seriesSlug: product.seriesSlug || '',
+                                  productType: product.productType || '',
+                                  productEffect: product.productEffect || '',
+                                  skinType: product.skinType || '',
+                                  hairType: product.hairType || '',
+                                  ingredients: product.ingredients || '',
+                                  usage: product.usage || '',
+                                  weightValue: product.weight?.value || '',
+                                  weightUnit: product.weight?.unit || 'q',
+                                  volumeValue: product.volume?.value || '',
+                                  volumeUnit: product.volume?.unit || 'ml'
+                                }); 
+                                setIsProductModalOpen(true); 
+                              }} 
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            >
+                              <Edit3 size={18} />
+                            </button>
+                            <button 
+                              onClick={() => { 
+                                setItemToDelete({ id: product._id, type: 'product' }); 
+                                setIsDeleteModalOpen(true); 
+                              }} 
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1191,7 +1251,7 @@ const AdminDashboard = () => {
                     <div className="md:col-span-2 space-y-4">
                       <label className="text-sm font-semibold text-gray-700">Məhsul Şəkilləri (URL) *</label>
                       <div className="grid grid-cols-1 gap-4">
-                        {productForm.images.map((img, index) => (
+                        {productForm.images?.map((img, index) => (
                           <div key={index} className="flex gap-2">
                             <input 
                               placeholder={`Şəkil ${index + 1} URL`} 
@@ -1228,6 +1288,20 @@ const AdminDashboard = () => {
                       {formErrors.images && <p className="text-red-500 text-xs mt-1">{formErrors.images}</p>}
                     </div>
 
+                    {/* Status Select */}
+                    <div className="md:col-span-2 space-y-1 pt-4">
+                      <label className="text-sm font-semibold text-gray-700">Məhsul Statusu</label>
+                      <select 
+                        value={productForm.status} 
+                        onChange={(e) => setProductForm({...productForm, status: e.target.value})}
+                        className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none"
+                      >
+                        <option value="active">Aktiv</option>
+                        <option value="inactive">Passiv</option>
+                        <option value="out_of_stock">Stokda yoxdur</option>
+                      </select>
+                    </div>
+                    
                     {/* Boolean Filters */}
                     <div className="md:col-span-2 grid grid-cols-3 gap-4 pt-4">
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -1257,8 +1331,18 @@ const AdminDashboard = () => {
                     </div>
 
                     {/* Collection, Product Type, Etc. */}
+                    <input 
+                      placeholder="Seriya Adı" 
+                      value={productForm.seriesName} 
+                      onChange={e => setProductForm({
+                        ...productForm, 
+                        seriesName: e.target.value,
+                        seriesSlug: slugify(e.target.value)
+                      })} 
+                      className="px-6 py-4 bg-gray-50 rounded-2xl outline-none" 
+                    />
                     <select value={productForm.collection} onChange={e => setProductForm({...productForm, collection: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none">
-                      <option value="">Seriya Seçin</option>
+                      <option value="">Kolleksiya Seçin</option>
                       {collections.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <select value={productForm.productType} onChange={e => setProductForm({...productForm, productType: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none">
@@ -1311,7 +1395,7 @@ const AdminDashboard = () => {
                       <button onClick={() => { setEditingCatalog(catalog); setCatalogForm(catalog); setIsCatalogModalOpen(true); }} className="flex-1 py-2 bg-blue-50 text-blue-600 font-semibold rounded-xl hover:bg-blue-100 transition-all">
                         <Edit3 size={16} className="inline mr-1" /> Redaktə Et
                       </button>
-                      <button onClick={() => deleteCatalog(catalog._id)} className="flex-1 py-2 bg-red-50 text-red-600 font-semibold rounded-xl hover:bg-red-100 transition-all">
+                      <button onClick={() => { setItemToDelete({ id: catalog._id, type: 'catalog' }); setIsDeleteModalOpen(true); }} className="flex-1 py-2 bg-red-50 text-red-600 font-semibold rounded-xl hover:bg-red-100 transition-all">
                         <Trash2 size={16} className="inline mr-1" /> Sil
                       </button>
                     </div>
@@ -1471,6 +1555,36 @@ const AdminDashboard = () => {
           </div>
         )}
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <div className="text-center">
+              <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} className="text-red-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">Məhsulu silmək istəyirsiniz?</h3>
+              <p className="text-gray-600 mb-8">Bu əməliyyat geri qaytarılmayacaq.</p>
+              
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setIsDeleteModalOpen(false)} 
+                  className="flex-1 py-4 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition-all"
+                >
+                  Ləğv et
+                </button>
+                <button 
+                  onClick={confirmDelete} 
+                  className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all shadow-lg"
+                >
+                  Sil
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

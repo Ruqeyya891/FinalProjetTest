@@ -139,20 +139,9 @@ const Home = ({ searchTerm = "" }) => {
     }
   };
 
-  const filteredProducts = products.filter((product) => {
-    const q = searchTerm?.toLowerCase().trim();
-    if (!q) return true;
+  // No filtering on Home page - show all products regardless of searchTerm
+  const filteredProducts = products;
 
-    return (
-      product.name?.toLowerCase().includes(q) ||
-      product.sku?.toString().toLowerCase().includes(q) ||
-      product.article?.toString().toLowerCase().includes(q) ||
-      product.artikul?.toString().toLowerCase().includes(q)
-    );
-  });
-
-  console.log("searchTerm:", searchTerm);
-  console.log("filteredProducts:", filteredProducts);
 
   return (
     <div className="bg-pink-50 min-h-screen">

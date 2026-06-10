@@ -22,6 +22,7 @@ const getProducts = async (req, res) => {
           isPromotion,
           isHit,
           collection,
+          series,
           productType,
           productEffect,
           skinType,
@@ -33,8 +34,10 @@ const getProducts = async (req, res) => {
 
         // Regular users only see active AND in-stock products
         if (!isAdmin) {
-            query.isActive = true;
-            query.isInStock = true;
+            query.$and = [
+                { $or: [{ status: 'active' }, { isActive: true }] }, // Backward compatibility
+                { isInStock: true }
+            ];
         }
 
         // Category filtering logic with slugs
@@ -66,6 +69,7 @@ const getProducts = async (req, res) => {
 
         // String filters
         if (collection) query.collection = collection;
+        if (series) query.seriesSlug = series;
         if (productType) query.productType = productType;
         if (productEffect) query.productEffect = productEffect;
         if (skinType) query.skinType = skinType;
@@ -78,9 +82,17 @@ const getProducts = async (req, res) => {
             if (maxPrice) query.price_sale.$lte = Number(maxPrice);
         }
 
-        // Search filter
+        // Search filter - search across multiple fields
         if (search) {
-            query.name = { $regex: search, $options: 'i' };
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { sku: { $regex: search, $options: 'i' } },
+                { article: { $regex: search, $options: 'i' } },
+                { artikul: { $regex: search, $options: 'i' } },
+                { seriesName: { $regex: search, $options: 'i' } },
+                { seriesSlug: { $regex: search, $options: 'i' } },
+                { collection: { $regex: search, $options: 'i' } }
+            ];
         }
 
         const products = await Product.find(query);
@@ -100,8 +112,10 @@ const getProductById = async (req, res) => {
         
         // Regular users only see active AND in-stock products
         if (!isAdmin) {
-            query.isActive = true;
-            query.isInStock = true;
+            query.$and = [
+                { $or: [{ status: 'active' }, { isActive: true }] }, // Backward compatibility
+                { isInStock: true }
+            ];
         }
         
         const product = await Product.findOne(query);

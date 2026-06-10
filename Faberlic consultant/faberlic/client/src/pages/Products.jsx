@@ -54,7 +54,7 @@ const productTypes = [
   "Saç lakı", "Saç maskası", "Saç misti", "Saç spreyi", "Saç zərdabı",
   "Saçlar üçün ampullu konsentrat", "Saçlar üçün aromatik su", "Sprey",
   "Stik", "Sərt sabun", "Trimmer", "Təmizləyici zolaqlar", "Təraş köpüyü",
-  "Təraş sonrası balzam", "Təraş sonrası losyon", "Uşaqlar üçün bez altı krem",
+  "Təraş sonrası balzam", "Təraş sonrası losyon", "Uşaqlara üçün bez altı krem",
   "Vanna duzu", "Vanna köpüyü", "Yaxalayıcı", "Yağ", "Yuyunma geli",
   "Yuyunma köpüyü", "Yuyunma üçün süd", "Ülgüc", "Üz maskası",
   "Üz üçün balzam", "Üz üçün gel-cilalama", "Üz üçün losyon", "Üz üçün mist",
@@ -70,8 +70,8 @@ const productEffects = [
   "Canlandırma", "Cilalama", "Depilyasiya/təraş",
   "Diş ərpi və diş daşı əleyhinə", "Diş ətinə qulluq", "Dişlərin ağardılması",
   "Dolğunlaşdırma", "Dərindən təmizləmə", "Dərinin möhkəmlənməsi üçün",
-  "Elastiklik üçün", "Günəşdən qoruma", "Həcm", "Həsass dişlərə qulluq üçün",
-  "İntim zonaların bəyazladılması", "Kariyesdən qoruma",
+  "Elastiklik üçün", "Günəşdən qorunma", "Həcm", "Həsass dişlərə qulluq üçün",
+  "İntim zonaların bəyazladılması", "Kariyesdən qorunma",
   "Kariyesin profilaktikası", "Kompleksli qulluq", "Konsionerləşdirmə",
   "Kəpəyə qarşı", "Liftinq", "Makiyajın çıxarılması",
   "Mikrofloranın normallaşdırılması", "Minanın möhkəmləndirilməsi və bərpası",
@@ -81,16 +81,16 @@ const productEffects = [
   "Qıcıqlanmaya qarşı", "Qidalandırma", "Qırışlar", "Qoxuların götürülməsi",
   "Rəngin qorunması", "Sarılığın neytrallaşdırılması", "Saçlara intensiv qulluq",
   "Saçların böyüməsi", "Saçların tökülməsinə qarşı", "Sellülit əleyhinə",
-  "Staylinq", "Sürtünmədən qoruma", "Tualet üçün", "Tünd dairələrə qarşı",
-  "Təmizləmə", "Tər qoxusundan qoruma", "Tər qoxusunun neytrallaşdırılması",
+  "Staylinq", "Sürtünmədən qorunma", "Tualet üçün", "Tünd dairələrə qarşı",
+  "Təmizləmə", "Tər qoxusundan qorunma", "Tər qoxusunun neytrallaşdırılması",
   "Tərləmənin bloklanması", "Vanna və duş vasitələri", "Vanna üçün",
-  "Varikoza qarşı", "Yağlılığa qarşı", "Yaşlanma əleyhinə qulluq",
+  "Varikoz qarşı", "Yağlılığa qarşı", "Yaşlanma əleyhinə qulluq",
   "Yumşaldıcı effekt", "Çaların bərabərləşməsi", "Çat və döyənəklərə qarşı",
-  "Çatlara qarşı", "Şaxtadan qoruma", "Əzələlər və oynaqlar üçün"
+  "Çatlara qarşı", "Şaxtadan qorunma", "Əzələr və oynaqlar üçün"
 ];
 
 const skinTypes = [
-  "Bütün tiplər", "Həssas", "Normal", "Problemli",
+  "Bütün tiplər", "Həsass", "Normal", "Problemli",
   "Qarışıq", "Quru", "Susuzlaşdırılmış", "Yağlılıq", "Yetkin"
 ];
 
@@ -104,15 +104,15 @@ const formatPrice = (price) => {
 };
 
 const normalize = (str) => 
-  str?.toLowerCase() 
-    .replaceAll("ə", "e") 
-    .replaceAll("ü", "u") 
-    .replaceAll("ö", "o") 
-    .replaceAll("ğ", "g") 
-    .replaceAll("ı", "i") 
-    .replaceAll("ş", "s") 
-    .replaceAll("ç", "c") 
-    .replace(/\s+/g, "-");
+  str?.toLowerCase()
+    .replaceAll('ə', 'e')
+    .replaceAll('ü', 'u')
+    .replaceAll('ö', 'o')
+    .replaceAll('ğ', 'g')
+    .replaceAll('ı', 'i')
+    .replaceAll('ş', 's')
+    .replaceAll('ç', 'c')
+    .replace(/\s+/g, '-');
 
 const Products = ({ searchTerm }) => {
   // ALL HOOKS MUST BE AT THE TOP - NO CONDITIONAL BEFORE THEM!
@@ -143,6 +143,8 @@ const Products = ({ searchTerm }) => {
   const mainCategorySlug = searchParams.get('category');
   const subCategorySlug = searchParams.get('subcategory');
   const childCategorySlug = searchParams.get('childCategory');
+  const seriesSlug = searchParams.get('series');
+  const searchQuery = searchParams.get('search');
 
   // Find current category objects
   const currentMainCategory = categoryData.find(c => c.slug === mainCategorySlug);
@@ -151,17 +153,20 @@ const Products = ({ searchTerm }) => {
   useEffect(() => {
     fetchProducts();
     fetchFavorites();
-  }, [mainCategorySlug, subCategorySlug, childCategorySlug, activeFilters]);
+  }, [mainCategorySlug, subCategorySlug, childCategorySlug, seriesSlug, searchQuery, activeFilters]);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
       const params = {};
       
-      // Use slugs for filtering
+      // Use slugs for filtering - only apply the most specific one
       if (childCategorySlug) params.childCategory = childCategorySlug;
       else if (subCategorySlug) params.subcategory = subCategorySlug;
       else if (mainCategorySlug) params.category = mainCategorySlug;
+      
+      if (seriesSlug) params.series = seriesSlug;
+      if (searchQuery) params.search = searchQuery;
 
       // Add all other filters
       if (activeFilters.isInStock) params.isInStock = true;
@@ -213,7 +218,7 @@ const Products = ({ searchTerm }) => {
     try {
       if (action === 'cart') {
         const payload = { productId: product._id || product.id, quantity: 1 };
-        console.log('Adding to cart payload:', payload);
+        console.log('Adding to cart (Home):', payload);
         const response = await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
           payload,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -288,7 +293,60 @@ const Products = ({ searchTerm }) => {
     }
   }, [mainCategorySlug, subCategorySlug, childCategorySlug, products, filteredProducts, searchTerm]);
 
+  // Determine what buttons to show - only one level at a time
+  const getCategoryButtons = () => {
+    if (seriesSlug || searchQuery) {
+      // If filtering by series or search - no category buttons
+      return [];
+    }
+    if (childCategorySlug) {
+      // At child level - no more buttons, just products
+      return [];
+    } else if (subCategorySlug) {
+      // At subcategory level - show "Hamısı" + its child categories
+      return [
+        { name: 'Hamısı', slug: null },
+        ...(currentSubCategory?.childCategories || [])
+      ];
+    } else if (mainCategorySlug) {
+      // At main category level - show "Hamısı" + its subcategories
+      return [
+        { name: 'Hamısı', slug: null },
+        ...(currentMainCategory?.subCategories || [])
+      ];
+    } else {
+      // No category selected - show all main categories
+      return categoryData;
+    }
+  };
 
+  const getCategoryButtonLink = (cat) => {
+    if (cat.slug === null) {
+      // "Hamısı" button - go to current level without lower levels
+      if (subCategorySlug) {
+        return `/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}`;
+      } else if (mainCategorySlug) {
+        return `/products?category=${mainCategorySlug}`;
+      }
+      return '/products';
+    }
+
+    if (childCategorySlug) {
+      // Already at child level
+      return `/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}&childCategory=${cat.slug}`;
+    } else if (subCategorySlug) {
+      // At subcategory level, go to child category
+      return `/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}&childCategory=${cat.slug}`;
+    } else if (mainCategorySlug) {
+      // At main category level, go to subcategory
+      return `/products?category=${mainCategorySlug}&subcategory=${cat.slug}`;
+    } else {
+      // No category, go to main category
+      return `/products?category=${cat.slug}`;
+    }
+  };
+
+  const categoryButtons = getCategoryButtons();
 
   if (loading) return (
     <div className="bg-pink-50/30 min-h-screen flex items-center justify-center">
@@ -306,16 +364,52 @@ const Products = ({ searchTerm }) => {
               <Home size={14} />
               <span>Baş</span>
             </Link>
-            <ChevronRight size={14} className="mx-2" />
-            {currentMainCategory && (
+            {seriesSlug && (
               <>
-                <span className="text-gray-900 font-medium">{currentMainCategory.name}</span>
+                <ChevronRight size={14} className="mx-2" />
+                <span className="text-gray-500 hover:text-pink-600">Axtarış nəticələri</span>
+                <ChevronRight size={14} className="mx-2" />
+                <span className="text-gray-900 font-medium">
+                  {products[0]?.seriesName || products[0]?.collection || 'Seriya'}
+                </span>
+              </>
+            )}
+            {searchQuery && !seriesSlug && (
+              <>
+                <ChevronRight size={14} className="mx-2" />
+                <span className="text-gray-500 hover:text-pink-600">Axtarış nəticələri</span>
+                <ChevronRight size={14} className="mx-2" />
+                <span className="text-gray-900 font-medium">"{searchQuery}"</span>
+              </>
+            )}
+            {!seriesSlug && !searchQuery && currentMainCategory && (
+              <>
+                <ChevronRight size={14} className="mx-2" />
+                <Link to={`/products?category=${mainCategorySlug}`} className="hover:text-pink-600 transition-colors">
+                  {currentMainCategory.name}
+                </Link>
                 {currentSubCategory && (
                   <>
                     <ChevronRight size={14} className="mx-2" />
-                    <span className="text-gray-900 font-medium">{currentSubCategory.name}</span>
+                    <Link to={`/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}`} className="hover:text-pink-600 transition-colors">
+                      {currentSubCategory.name}
+                    </Link>
+                    {childCategorySlug && (
+                      <>
+                        <ChevronRight size={14} className="mx-2" />
+                        <span className="text-gray-900 font-medium">
+                          {currentSubCategory?.childCategories.find(c => c.slug === childCategorySlug)?.name}
+                        </span>
+                      </>
+                    )}
                   </>
                 )}
+              </>
+            )}
+            {!seriesSlug && !searchQuery && !currentMainCategory && (
+              <>
+                <ChevronRight size={14} className="mx-2" />
+                <span className="text-gray-900 font-medium">Bütün Məhsullar</span>
               </>
             )}
           </nav>
@@ -326,10 +420,24 @@ const Products = ({ searchTerm }) => {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
               <Sparkles className="text-pink-600" />
-              {currentSubCategory?.name || currentMainCategory?.name || 'Bütün Məhsullar'}
+              {seriesSlug 
+                ? (products[0]?.seriesName || products[0]?.collection || 'Seriya')
+                : searchQuery 
+                  ? `Axtarış: "${searchQuery}"`
+                  : childCategorySlug 
+                    ? currentSubCategory?.childCategories.find(c => c.slug === childCategorySlug)?.name
+                    : currentSubCategory?.name || currentMainCategory?.name || 'Bütün Məhsullar'
+              }
             </h1>
             <p className="text-gray-500 mt-2 text-sm md:text-base">
-              {currentMainCategory ? `${currentMainCategory.name} kateqoriyası üzrə məhsullar` : 'Ən keyfiyyətli Faberlik məhsulları sizin üçün seçilib.'}
+              {seriesSlug 
+                ? 'Seçilmiş seriyaya aid məhsullar'
+                : searchQuery 
+                  ? 'Axtarışa uyğun məhsullar'
+                  : currentMainCategory 
+                    ? `${currentMainCategory.name} kateqoriyası üzrə məhsullar` 
+                    : 'Ən keyfiyyətli Faberlik məhsulları sizin üçün seçilib.'
+              }
             </p>
           </div>
           <div className="relative max-w-md w-full">
@@ -350,70 +458,28 @@ const Products = ({ searchTerm }) => {
           </div>
         </div>
 
-        {/* Subcategory Buttons (if main category selected) */}
-        {currentMainCategory?.subCategories.length > 0 && (
+        {/* Category Buttons */}
+        {categoryButtons.length > 0 && (
           <div className="mb-8 md:mb-12">
             <div className="flex flex-wrap gap-2 md:gap-3 overflow-x-auto pb-2">
-              <button
-                onClick={() => {
-                  navigate(`/products?category=${mainCategorySlug}`);
-                }}
-                className={`px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-semibold text-sm transition-all flex-shrink-0 ${
-                  !subCategorySlug 
-                    ? 'bg-pink-600 text-white shadow-md' 
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
-                }`}
-              >
-                Hamısı
-              </button>
-              {currentMainCategory.subCategories.map(subCat => (
+              {categoryButtons.map(cat => (
                 <button
-                  key={subCat.slug}
-                  onClick={() => {
-                    navigate(`/products?category=${mainCategorySlug}&subcategory=${subCat.slug}`);
-                  }}
+                  key={cat.slug || 'hamisi'}
+                  onClick={() => navigate(getCategoryButtonLink(cat))}
                   className={`px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-semibold text-sm transition-all flex-shrink-0 ${
-                    subCategorySlug === subCat.slug
-                      ? 'bg-pink-600 text-white shadow-md' 
-                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
+                    (cat.slug === null) 
+                      ? (
+                          (subCategorySlug && !childCategorySlug) || 
+                          (mainCategorySlug && !subCategorySlug && !childCategorySlug)
+                        )
+                        ? 'bg-pink-600 text-white shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
+                      : (childCategorySlug === cat.slug) || (subCategorySlug === cat.slug && !childCategorySlug) || (mainCategorySlug === cat.slug && !subCategorySlug && !childCategorySlug)
+                        ? 'bg-pink-600 text-white shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
                   }`}
                 >
-                  {subCat.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Child Category Buttons (if subcategory selected) */}
-        {currentSubCategory?.childCategories.length > 0 && (
-          <div className="mb-8 md:mb-12">
-            <div className="flex flex-wrap gap-2 md:gap-3 overflow-x-auto pb-2">
-              <button
-                onClick={() => {
-                  navigate(`/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}`);
-                }}
-                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl font-medium text-xs md:text-sm transition-all flex-shrink-0 ${
-                  !childCategorySlug 
-                    ? 'bg-pink-600 text-white shadow-md' 
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
-                }`}
-              >
-                Hamısı
-              </button>
-              {currentSubCategory.childCategories.map(childCat => (
-                <button
-                  key={childCat.slug}
-                  onClick={() => {
-                    navigate(`/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}&childCategory=${childCat.slug}`);
-                  }}
-                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl font-medium text-xs md:text-sm transition-all flex-shrink-0 ${
-                    childCategorySlug === childCat.slug
-                      ? 'bg-pink-600 text-white shadow-md' 
-                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-pink-50 hover:text-pink-600'
-                  }`}
-                >
-                  {childCat.name}
+                  {cat.name}
                 </button>
               ))}
             </div>
@@ -537,12 +603,12 @@ const Products = ({ searchTerm }) => {
           {/* Product Grid */}
           <div className="flex-1">
             {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-8">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8">
                 {filteredProducts.map(product => (
                   <Link 
                     to={`/product/${product._id}`}
                     key={product._id} 
-                    className="block bg-white rounded-2xl shadow-sm border border-pink-100 overflow-hidden group hover:shadow-xl transition-all duration-300"
+                    className="block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 group"
                   >
                     <div className="relative aspect-square overflow-hidden bg-pink-50">
                       <img 
@@ -569,14 +635,17 @@ const Products = ({ searchTerm }) => {
                             : 'bg-white text-gray-400 hover:text-pink-600'
                         }`}
                       >
-                        <Heart size={16} fill={favorites.includes(product._id.toString()) ? "currentColor" : "none"} />
+                        <Heart 
+                          size={16} 
+                          fill={favorites.includes(product._id.toString()) ? "currentColor" : "none"} 
+                        />
                       </button>
                     </div>
                     <div className="p-3 md:p-6">
                       <div className="text-[10px] md:text-xs text-pink-600 font-semibold mb-1 md:mb-2 uppercase tracking-wider">
                         {product.sku}
                       </div>
-                      <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-3 group-hover:text-pink-600 transition-colors line-clamp-2">{product.name}</h3>
+                      <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-3 line-clamp-2 group-hover:text-pink-600 transition-colors">{product.name}</h3>
                       
                       <div className="flex items-center justify-between pt-2 md:pt-4 border-t border-pink-50">
                         <div>
