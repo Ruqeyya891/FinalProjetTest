@@ -3,6 +3,7 @@ const Product = require('../models/Product');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
+const notificationService = require('../services/notificationService');
 
 // Favorites (Note: Currently not in User model, needs adjustment if required)
 const toggleFavorite = async (req, res) => {
@@ -69,6 +70,11 @@ const addToCart = async (req, res) => {
         const product = await Product.findById(productId);
         if (!product) {
             return res.status(404).json({ success: false, error: 'Product not found' });
+        }
+        
+        // Check product status
+        if (product.status === 'passive' || product.status === 'out_of_stock') {
+            return res.status(400).json({ success: false, error: 'Bu məhsul artıq mövcud deyil' });
         }
 
         const user = await User.findById(userId);
@@ -174,46 +180,93 @@ const getCart = async (req, res) => {
     }
 };
 
+// Helper function to generate random numeric code
+const generateNumericCode = (length, prefix = '') => {
+    let code = prefix;
+    for (let i = 0; i < length - prefix.length; i++) {
+        code += Math.floor(Math.random() * 10).toString();
+    }
+    return code;
+};
+
 const registerUser = async (req, res) => {
     try {
-        const { name, surname, username, email, password, gender } = req.body;
+        const { fullName, phone, email } = req.body;
 
-        // Restriction: Only females allowed
-        if (gender !== 'female') {
-            return res.status(403).json({ success: false, error: 'Qeydiyyat yalnız xanımlar üçün mümkündür.' });
+        // Check for required fields
+        if (!fullName || !phone || !email) {
+            return res.status(400).json({ success: false, error: 'Bütün sahələr doldurulmalıdır.' });
         }
 
-        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+        // Check if email already exists
+        const existingUser = await User.findOne({ email });
         if (existingUser) {
-            return res.status(400).json({ success: false, error: 'Bu e-poçt və ya istifadəçi adı artıq qeydiyyatdan keçib.' });
+            return res.status(400).json({ success: false, error: 'Bu e-poçt artıq qeydiyyatdan keçib.' });
         }
 
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        // Generate unique customerCode (always starts with 3, 9 digits total)
+        let customerCode;
+        let customerCodeExists = true;
+        while (customerCodeExists) {
+            customerCode = generateNumericCode(9, '3');
+            const existingCode = await User.findOne({ customerCode });
+            customerCodeExists = !!existingCode;
+        }
 
+        // Generate accessKey
+        const accessKey = generateNumericCode(6);
+
+        // Log codes to console
+        console.log("Customer Code:", customerCode);
+        console.log("Access Key:", accessKey);
+
+        // Hash accessKey
+        const salt = await bcrypt.genSalt(10);
+        const accessKeyHash = await bcrypt.hash(accessKey, salt);
+
+        // Create new user
         const newUser = new User({
-            name,
-            surname,
-            username,
+            fullName,
+            phone,
             email,
-            password: hashedPassword,
-            gender: 'female',
-            role: 'user'
+            customerCode,
+            accessKeyHash,
+            role: 'user',
+            // For backward compatibility
+            name: fullName.split(' ')[0],
+            surname: fullName.split(' ').slice(1).join(' '),
+            username: customerCode
         });
 
         await newUser.save();
 
+        // TODO: SMS və WhatsApp API sonra qoşulacaq
+        // Generate WhatsApp link
+        // const whatsappLink = notificationService.sendWhatsAppNotification(phone, customerCode, accessKey);
+
+        // Optional: Try to send via Twilio if configured (for future)
+        // try {
+        //     await notificationService.sendTwilioSMS(phone, customerCode, accessKey);
+        // } catch (twilioError) {
+        //     console.warn('Twilio SMS failed (expected if not configured):', twilioError.message);
+        // }
+
         const token = jwt.sign({ id: newUser._id, role: newUser.role }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
 
-        res.status(201).json({ success: true, user: {
-            id: newUser._id,
-            name: newUser.name,
-            surname: newUser.surname,
-            username: newUser.username,
-            email: newUser.email,
-            role: newUser.role
-        }, token });
+        res.status(201).json({ 
+            success: true, 
+            user: {
+                id: newUser._id,
+                fullName: newUser.fullName,
+                phone: newUser.phone,
+                email: newUser.email,
+                customerCode: newUser.customerCode,
+                role: newUser.role
+            }, 
+            token,
+            accessKey // Show accessKey to user only once
+            // whatsappLink // TODO: Add this back when SMS/WhatsApp is enabled
+        });
 
     } catch (error) {
         console.error('Registration error:', error);
@@ -223,38 +276,65 @@ const registerUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        console.log('Login attempt for:', email);
-        
-        // Search by email or username
-        const user = await User.findOne({ 
-            $or: [
-                { email: email.toLowerCase() },
-                { username: email }
-            ]
-        });
+        const { customerCode, accessKey, email, password } = req.body;
 
-        if (!user) {
-            console.log('User not found:', email);
-            return res.status(401).json({ success: false, error: 'E-poçt və ya şifrə yanlışdır.' });
+        let user;
+        let isMatch = false;
+
+        // Check if it's the new customerCode/accessKey login
+        if (customerCode && accessKey) {
+            console.log('Login attempt for customerCode:', customerCode);
+            user = await User.findOne({ customerCode });
+            if (user && user.accessKeyHash) {
+                isMatch = await bcrypt.compare(accessKey, user.accessKeyHash);
+            }
+        }
+        // Backward compatibility: support old email/password login for admins
+        else if (email && password) {
+            console.log('Login attempt for email:', email);
+            user = await User.findOne({ 
+                $or: [
+                    { email: email.toLowerCase() },
+                    { username: email }
+                ] 
+            });
+            if (user && user.password) {
+                isMatch = await bcrypt.compare(password, user.password);
+            }
         }
 
-        const isMatch = await bcrypt.compare(password, user.password);
+        if (!user) {
+            console.log('User not found');
+            return res.status(401).json({ success: false, error: 'Müştəri kodu və ya giriş açarı yanlışdır.' });
+        }
+
         if (!isMatch) {
-            console.log('Password mismatch for:', email);
-            return res.status(401).json({ success: false, error: 'E-poçt və ya şifrə yanlışdır.' });
+            console.log('Credentials mismatch');
+            return res.status(401).json({ success: false, error: 'Müştəri kodu və ya giriş açarı yanlışdır.' });
         }
 
         const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
 
-        res.status(200).json({ success: true, user: {
+        // Prepare user response with backward compatibility
+        const userResponse = {
             id: user._id,
-            name: user.name,
-            surname: user.surname,
-            username: user.username,
-            email: user.email,
             role: user.role
-        }, token });
+        };
+        
+        if (user.fullName) userResponse.fullName = user.fullName;
+        if (user.phone) userResponse.phone = user.phone;
+        if (user.email) userResponse.email = user.email;
+        if (user.customerCode) userResponse.customerCode = user.customerCode;
+        // Old fields for backward compatibility
+        if (user.name) userResponse.name = user.name;
+        if (user.surname) userResponse.surname = user.surname;
+        if (user.username) userResponse.username = user.username;
+
+        res.status(200).json({ 
+            success: true, 
+            user: userResponse, 
+            token 
+        });
 
     } catch (error) {
         console.error('Login error:', error);

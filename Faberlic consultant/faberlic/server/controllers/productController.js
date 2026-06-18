@@ -32,21 +32,20 @@ const getProducts = async (req, res) => {
         } = req.query;
         let query = {};
 
-        // Regular users only see active AND in-stock products
+        // Regular users only see active OR out_of_stock products (not passive)
         if (!isAdmin) {
-            query.$and = [
-                { $or: [{ status: 'active' }, { isActive: true }] }, // Backward compatibility
-                { isInStock: true }
-            ];
+            query.status = { $ne: 'passive' };
         }
 
-        // Category filtering logic with slugs
+        // Category filtering logic - filter by all present category slugs together
+        if (category) {
+            query.categorySlug = category;
+        }
+        if (subcategory) {
+            query.subCategorySlug = subcategory;
+        }
         if (childCategory) {
             query.childCategorySlug = childCategory;
-        } else if (subcategory) {
-            query.subCategorySlug = subcategory;
-        } else if (category) {
-            query.categorySlug = category;
         }
 
         // Boolean filters - if user explicitly requests, use their choice
@@ -110,12 +109,9 @@ const getProductById = async (req, res) => {
         
         let query = { _id: req.params.id };
         
-        // Regular users only see active AND in-stock products
+        // Regular users only see active OR out_of_stock products (not passive)
         if (!isAdmin) {
-            query.$and = [
-                { $or: [{ status: 'active' }, { isActive: true }] }, // Backward compatibility
-                { isInStock: true }
-            ];
+            query.status = { $ne: 'passive' };
         }
         
         const product = await Product.findOne(query);
@@ -275,6 +271,49 @@ const importProducts = async (req, res) => {
     }
 };
 
+// @desc Update product status (Admin)
+// @route PATCH /api/products/:id/status
+const updateProductStatus = async (req, res) => { 
+    try { 
+        console.log("STATUS ROUTE HIT"); 
+        console.log("ID:", req.params.id); 
+        console.log("BODY:", req.body); 
+ 
+        const { id } = req.params; 
+        const { status } = req.body; 
+ 
+        if (!["active", "passive", "out_of_stock"].includes(status)) { 
+            return res.status(400).json({ message: "Invalid status value" }); 
+        } 
+
+        // First check if the product exists
+        const existingProduct = await Product.findById(id);
+        if (!existingProduct) { 
+            return res.status(404).json({ message: "Product not found" }); 
+        }
+        
+        console.log("Existing product found, updating status...");
+        
+        // Now update without runValidators first to test
+        const product = await Product.findByIdAndUpdate( 
+            id, 
+            { status }, 
+            { new: true } 
+        ); 
+ 
+        return res.json({ 
+            success: true, 
+            product 
+        }); 
+    } catch (error) { 
+        console.error("STATUS BACKEND ERROR:", error); 
+        console.error("Error stack:", error.stack);
+        return res.status(500).json({ 
+            message: error.message 
+        }); 
+    } 
+};
+
 // @desc Delete product (Admin)
 // @route DELETE /api/products/:id
 const deleteProduct = async (req, res) => {
@@ -295,6 +334,7 @@ module.exports = {
     syncProducts,
     createProduct,
     updateProduct,
+    updateProductStatus,
     deleteProduct,
     importProducts
 };

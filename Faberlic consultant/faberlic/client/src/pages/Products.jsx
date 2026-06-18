@@ -140,9 +140,10 @@ const Products = ({ searchTerm }) => {
     maxPrice: ''
   });
 
+  // Read search params with consistent names
   const mainCategorySlug = searchParams.get('category');
   const subCategorySlug = searchParams.get('subcategory');
-  const childCategorySlug = searchParams.get('childCategory');
+  const childCategorySlug = searchParams.get('childcategory') || searchParams.get('childCategory');
   const seriesSlug = searchParams.get('series');
   const searchQuery = searchParams.get('search');
 
@@ -160,10 +161,10 @@ const Products = ({ searchTerm }) => {
       setLoading(true);
       const params = {};
       
-      // Use slugs for filtering - only apply the most specific one
+      // Send all present category slugs to the backend to filter together
+      if (mainCategorySlug) params.category = mainCategorySlug;
+      if (subCategorySlug) params.subcategory = subCategorySlug;
       if (childCategorySlug) params.childCategory = childCategorySlug;
-      else if (subCategorySlug) params.subcategory = subCategorySlug;
-      else if (mainCategorySlug) params.category = mainCategorySlug;
       
       if (seriesSlug) params.series = seriesSlug;
       if (searchQuery) params.search = searchQuery;
@@ -208,6 +209,12 @@ const Products = ({ searchTerm }) => {
 
   const handleAction = async (e, action, product) => {
     e.preventDefault();
+    
+    if (action === 'cart' && (product.status === 'passive' || product.status === 'out_of_stock')) {
+      toast.error('Bu məhsul artıq mövcud deyil');
+      return;
+    }
+
     const token = localStorage.getItem('token');
     if (!token) {
       toast.info('Bu əməliyyat üçün daxil olmalısınız.');
@@ -218,7 +225,7 @@ const Products = ({ searchTerm }) => {
     try {
       if (action === 'cart') {
         const payload = { productId: product._id || product.id, quantity: 1 };
-        console.log('Adding to cart (Home):', payload);
+        console.log('Adding to cart (Products):', payload);
         const response = await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
           payload,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -245,6 +252,9 @@ const Products = ({ searchTerm }) => {
   };
 
   const filteredProducts = products.filter(product => {
+    // 0. Filter out passive products
+    if (product.status === 'passive') return false;
+
     // 1. Search term filter
     const q = searchTerm?.toLowerCase().trim();
     const matchesSearch = !q || (
@@ -254,16 +264,26 @@ const Products = ({ searchTerm }) => {
       product.artikul?.toString().toLowerCase().includes(q)
     );
 
-    // 2. Category/Subcategory/ChildCategory filter
-    const productCategory = product.categorySlug || normalize(product.category);
-    const productSubCategory = product.subCategorySlug || normalize(product.subcategory || product.subCategory);
-    const productChildCategory = product.childCategorySlug || normalize(product.childCategory);
+    // 2. Category/Subcategory/ChildCategory filter - EXACTLY as user requested
+    const matchCategory = !mainCategorySlug || product.categorySlug === mainCategorySlug;
+    const matchSubCategory = !subCategorySlug || product.subCategorySlug === subCategorySlug;
+    const matchChildCategory = !childCategorySlug || product.childCategorySlug === childCategorySlug;
 
-    if (mainCategorySlug && productCategory !== mainCategorySlug) return false;
-    if (subCategorySlug && productSubCategory !== subCategorySlug) return false;
-    if (childCategorySlug && productChildCategory !== childCategorySlug) return false;
+    // Debug log as requested
+    console.log({
+      categorySlug: mainCategorySlug,
+      subCategorySlug: subCategorySlug,
+      childCategorySlug: childCategorySlug,
+      products: products.map(p => ({ 
+        name: p.name, 
+        categorySlug: p.categorySlug, 
+        subCategorySlug: p.subCategorySlug, 
+        childCategorySlug: p.childCategorySlug 
+      })),
+      filteredProducts: products.filter(p => (!mainCategorySlug || p.categorySlug === mainCategorySlug) && (!subCategorySlug || p.subCategorySlug === subCategorySlug) && (!childCategorySlug || p.childCategorySlug === childCategorySlug)).map(p => p.name)
+    });
 
-    return matchesSearch;
+    return matchesSearch && matchCategory && matchSubCategory && matchChildCategory;
   });
 
   useEffect(() => {
@@ -332,11 +352,11 @@ const Products = ({ searchTerm }) => {
     }
 
     if (childCategorySlug) {
-      // Already at child level
-      return `/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}&childCategory=${cat.slug}`;
+      // Already at child level - use consistent param name (childcategory lowercase)
+      return `/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}&childcategory=${cat.slug}`;
     } else if (subCategorySlug) {
-      // At subcategory level, go to child category
-      return `/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}&childCategory=${cat.slug}`;
+      // At subcategory level, go to child category - use consistent param name
+      return `/products?category=${mainCategorySlug}&subcategory=${subCategorySlug}&childcategory=${cat.slug}`;
     } else if (mainCategorySlug) {
       // At main category level, go to subcategory
       return `/products?category=${mainCategorySlug}&subcategory=${cat.slug}`;
@@ -617,10 +637,15 @@ const Products = ({ searchTerm }) => {
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
                       {product.isNewProduct && (
-                        <div className="absolute top-2 left-2 md:top-4 md:left-4 bg-pink-600 text-white text-xs font-bold px-2 md:px-3 py-1 md:py-1.5 rounded-full shadow-lg">
+                        <div className="absolute top-2 right-2 md:top-4 md:right-4 bg-pink-600 text-white text-xs font-bold px-2 md:px-3 py-1 md:py-1.5 rounded-full shadow-lg">
                           YENİ
                         </div>
                       )}
+                      {product.discountPercent > 0 || product.isDiscount || product.isPromotion ? (
+                        <div className="absolute top-2 left-2 md:top-4 md:left-4 bg-pink-600 text-white text-xs font-bold px-2 md:px-3 py-1 md:py-1.5 rounded-full shadow-lg">
+                          {product.discountPercent > 0 ? `-${product.discountPercent}%` : (product.isDiscount ? 'Endirim' : 'Aksiya')}
+                        </div>
+                      ) : null}
                       
                       {/* Favorite Button */}
                       <button 
@@ -657,22 +682,26 @@ const Products = ({ searchTerm }) => {
                       </div>
                       
                       <div className="flex items-center justify-between mt-3">
-                        <button 
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleAction(e, 'cart', product);
-                          }}
-                          className="px-3 md:px-5 py-1.5 md:py-2.5 bg-pink-50 text-pink-600 font-bold text-xs md:text-sm rounded-xl hover:bg-pink-600 hover:text-white transition-all"
-                        >
-                          Səbətə
-                        </button>
+                        {product.status === 'out_of_stock' ? (
+                          <button 
+                            disabled
+                            className="px-3 md:px-5 py-1.5 md:py-2.5 bg-gray-100 text-gray-500 font-bold text-xs md:text-sm rounded-xl cursor-not-allowed transition-all"
+                          >
+                            Stokda yoxdur
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleAction(e, 'cart', product);
+                            }}
+                            className="px-3 md:px-5 py-1.5 md:py-2.5 bg-pink-50 text-pink-600 font-bold text-xs md:text-sm rounded-xl hover:bg-pink-600 hover:text-white transition-all"
+                          >
+                            Səbətə
+                          </button>
+                        )}
                         <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            // The card is already a link, so no need to navigate here, but we prevent default/propagation
-                          }}
                           className="text-xs md:text-sm text-gray-500 hover:text-pink-600 font-medium transition-colors"
                         >
                           Ətraflı

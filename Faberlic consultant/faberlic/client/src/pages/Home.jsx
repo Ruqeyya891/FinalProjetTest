@@ -117,6 +117,11 @@ const Home = ({ searchTerm = "" }) => {
   };
 
   const addToCart = async (product) => {
+    if (product.status === 'passive' || product.status === 'out_of_stock') {
+      toast.error('Bu məhsul artıq mövcud deyil');
+      return;
+    }
+    
     const token = localStorage.getItem('token');
     if (!token) {
       toast.info('Bu əməliyyat üçün daxil olmalısınız.');
@@ -139,8 +144,8 @@ const Home = ({ searchTerm = "" }) => {
     }
   };
 
-  // No filtering on Home page - show all products regardless of searchTerm
-  const filteredProducts = products;
+  // Filter out passive products on Home page
+  const filteredProducts = products.filter(product => product.status !== 'passive');
 
 
   return (
@@ -253,9 +258,9 @@ const Home = ({ searchTerm = "" }) => {
                     alt={product.name} 
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
-                  {product.isDiscount || product.isPromotion ? (
+                  {product.discountPercent > 0 || product.isDiscount || product.isPromotion ? (
                     <div className="absolute top-2 left-2 md:top-4 md:left-4 bg-pink-600 text-white px-2 md:px-3 py-1 rounded-full text-xs md:text-sm font-bold">
-                      {product.isDiscount ? 'Endirim' : 'Aksiya'}
+                      {product.discountPercent > 0 ? `-${product.discountPercent}%` : (product.isDiscount ? 'Endirim' : 'Aksiya')}
                     </div>
                   ) : null}
                   <button 
@@ -293,21 +298,26 @@ const Home = ({ searchTerm = "" }) => {
                   </div>
                   
                   <div className="flex items-center justify-between mt-3">
-                    <button 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        addToCart(product);
-                      }} 
-                      className="px-3 md:px-5 py-1.5 md:py-2.5 bg-pink-50 text-pink-600 font-bold text-xs md:text-sm rounded-xl hover:bg-pink-600 hover:text-white transition-all"
-                    >
-                      Səbətə
-                    </button>
+                    {product.status === 'out_of_stock' ? (
+                      <button 
+                        disabled
+                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-gray-100 text-gray-500 font-bold text-xs md:text-sm rounded-xl cursor-not-allowed transition-all"
+                      >
+                        Stokda yoxdur
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          addToCart(product);
+                        }} 
+                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-pink-50 text-pink-600 font-bold text-xs md:text-sm rounded-xl hover:bg-pink-600 hover:text-white transition-all"
+                      >
+                        Səbətə
+                      </button>
+                    )}
                     <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
                       className="text-xs md:text-sm text-gray-500 hover:text-pink-600 font-medium transition-colors"
                     >
                       Ətraflı

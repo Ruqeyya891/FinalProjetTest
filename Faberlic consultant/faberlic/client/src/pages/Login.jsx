@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Key, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -7,7 +7,7 @@ import { jwtDecode } from 'jwt-decode';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ customerCode: '', accessKey: '' });
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -53,14 +53,14 @@ const Login = () => {
         <div className="p-10">
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="space-y-2">
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">E-poçt Ünvanı</label>
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Müştəri Kodu</label>
               <div className="relative group">
-                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600 transition-colors" size={20} />
+                <Key className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600 transition-colors" size={20} />
                 <input 
-                  type="email" 
-                  placeholder="nümunə@mail.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  type="text" 
+                  placeholder="Müştəri kodunuzu daxil edin"
+                  value={formData.customerCode}
+                  onChange={(e) => setFormData({...formData, customerCode: e.target.value})}
                   className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-pink-200 focus:bg-white rounded-2xl outline-none transition-all text-gray-700 font-medium"
                 />
               </div>
@@ -68,16 +68,15 @@ const Login = () => {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between px-2">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Şifrə</label>
-                <button type="button" className="text-xs font-bold text-pink-600 hover:underline">Şifrəni unutmusunuz?</button>
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Giriş Açarı</label>
               </div>
               <div className="relative group">
                 <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600 transition-colors" size={20} />
                 <input 
                   type={showPassword ? 'text' : 'password'} 
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  placeholder="••••••"
+                  value={formData.accessKey}
+                  onChange={(e) => setFormData({...formData, accessKey: e.target.value})}
                   className="w-full pl-14 pr-14 py-4 bg-gray-50 border-2 border-transparent focus:border-pink-200 focus:bg-white rounded-2xl outline-none transition-all text-gray-700 font-medium"
                 />
                 <button 

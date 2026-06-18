@@ -26,6 +26,10 @@ const productSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    discountPercent: {
+      type: Number,
+      default: 0,
+    },
 
     images: {
       type: [String],
@@ -48,11 +52,6 @@ const productSchema = new mongoose.Schema(
     volume: {
       value: { type: Number, min: 0, default: null },
       unit: { type: String, enum: ['ml', 'l'], default: 'ml' }
-    },
-
-    price_catalog: {
-      type: String,
-      default: "",
     },
     categorySlug: {
       type: String,
@@ -124,7 +123,7 @@ const productSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'out_of_stock'],
+      enum: ['active', 'passive', 'out_of_stock'],
       default: 'active',
     },
     sku: {
@@ -139,27 +138,48 @@ const productSchema = new mongoose.Schema(
   }
 );
 
-// Pre-save middleware: sync isActive with status for backward compatibility
+// Pre-save middleware: sync isActive and auto-set status based on stock
 productSchema.pre('save', function(next) {
-  if (this.status === 'active') {
-    this.isActive = true;
-  } else {
-    this.isActive = false;
+  if (typeof next === 'function') {
+    if (this.stock > 0 && this.status !== 'passive') {
+      this.status = 'active';
+      this.isActive = true;
+    } else if (this.stock <= 0 && this.status !== 'passive') {
+      this.status = 'out_of_stock';
+      this.isActive = false;
+    } else if (this.status === 'passive') {
+      this.isActive = false;
+    }
+    next();
   }
-  next();
 });
 
-// Pre-update middleware: sync isActive with status for backward compatibility
+// Pre-update middleware: sync isActive and auto-set status based on stock
 productSchema.pre('findOneAndUpdate', function(next) {
-  const update = this.getUpdate();
-  if (update.status !== undefined) {
-    if (update.status === 'active') {
-      update.isActive = true;
-    } else {
-      update.isActive = false;
+  if (typeof next === 'function') {
+    const update = this.getUpdate();
+    if (update) {
+      // If status is explicitly set, use that
+      if (update.status) {
+        if (update.status === 'active') {
+          update.isActive = true;
+        } else {
+          update.isActive = false;
+        }
+      }
+      // If stock is being updated, auto-set status if not explicitly set
+      else if (update.stock !== undefined) {
+        if (update.stock > 0) {
+          update.status = 'active';
+          update.isActive = true;
+        } else {
+          update.status = 'out_of_stock';
+          update.isActive = false;
+        }
+      }
     }
+    next();
   }
-  next();
 });
 
 module.exports = mongoose.model("Product", productSchema);

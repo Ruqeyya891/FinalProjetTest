@@ -14,6 +14,7 @@ import Favorites from './pages/Favorites';
 import Footer from './components/Footer';
 import Catalogs from './pages/Catalogs';
 import QuickOrder from './pages/QuickOrder';
+import About from './pages/About';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { jwtDecode } from 'jwt-decode';
@@ -87,6 +88,7 @@ function App() {
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<Home searchTerm={searchTerm} />} />
+            <Route path="/about" element={<About />} />
             <Route path="/products" element={<Products searchTerm={searchTerm} />} />
             <Route path="/product/:id" element={<ProductDetails />} />
             <Route path="/dashboard" element={<UserDashboard />} />

@@ -34,7 +34,7 @@ const generateAIResponse = async (userMessage) => {
     console.error('Stack:', error.stack);
     console.error('===================');
     
-    return "Bağışlayın, hazırda texniki problem var. Zəhmət olmasa WhatsApp ilə əlaqə saxlayın: 051 984 86 59.";
+    return "Bağışlayın, hazırda texniki problem var. Zəhmət olmasa daha sonra yenidən cəhd edin.";
   }
 };
 

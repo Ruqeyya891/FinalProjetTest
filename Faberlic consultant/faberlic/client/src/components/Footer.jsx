@@ -1,4 +1,5 @@
 import { Instagram, MessageCircle, Phone, Mail } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
   return (
@@ -15,9 +16,10 @@ const Footer = () => {
           <div>
             <h4 className="font-semibold text-gray-900 mb-4">Sürətli Keçidlər</h4>
             <ul className="space-y-2 text-sm text-gray-600">
-              <li><a href="/" className="hover:text-pink-600">Ana Səhifə</a></li>
-              <li><a href="/products" className="hover:text-pink-600">Məhsullar</a></li>
-              <li><a href="/ai-advisor" className="hover:text-pink-600">AI Məsləhətçi</a></li>
+              <li><Link to="/" className="hover:text-pink-600">Ana Səhifə</Link></li>
+              <li><Link to="/about" className="hover:text-pink-600">Faberlic haqqında</Link></li>
+              <li><Link to="/products" className="hover:text-pink-600">Məhsullar</Link></li>
+              <li><Link to="/ai-advisor" className="hover:text-pink-600">AI Məsləhətçi</Link></li>
             </ul>
           </div>
 

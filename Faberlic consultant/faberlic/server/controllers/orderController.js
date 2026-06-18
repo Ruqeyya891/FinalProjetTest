@@ -5,14 +5,47 @@ const User = require('../models/User');
 
 const createOrder = async (req, res) => {
     try {
-        const { products, totalAmount, contactMethod } = req.body;
+        const { products, totalAmount, contactMethod, notes } = req.body;
         const userId = req.user._id;
+
+        // Fetch full product details for each item and check stock
+        const items = [];
+        for (const item of products) {
+            const product = await Product.findById(item.product);
+            if (!product) {
+                return res.status(404).json({ success: false, error: 'Məhsul tapılmadı' });
+            }
+            if (product.stock < item.quantity) {
+                return res.status(400).json({ success: false, error: 'Bu məhsuldan stokda kifayət qədər yoxdur' });
+            }
+            
+            // Add full product details to items array
+            items.push({
+                productId: product._id,
+                name: product.name,
+                sku: product.sku,
+                image: product.images?.[0] || product.image,
+                price: product.price_sale,
+                quantity: item.quantity,
+                total: product.price_sale * item.quantity
+            });
+
+            // Now update stock for this product
+            const newStock = product.stock - item.quantity;
+            let newStatus = product.status;
+            if (newStock <= 0) {
+                newStatus = "out_of_stock";
+            }
+            await Product.findByIdAndUpdate(item.product, { stock: newStock, status: newStatus });
+        }
 
         const newOrder = new Order({
             user: userId,
-            products,
+            items,
+            products, // Keep for backward compatibility
             totalAmount,
-            contactMethod
+            contactMethod,
+            notes
         });
 
         await newOrder.save();
@@ -67,7 +100,9 @@ const getOrderStats = async (req, res) => {
 
 const getOrders = async (req, res) => {
     try {
-        const orders = await Order.find().populate('user', 'name surname email').populate('products.product', 'name image price_sale');
+        const orders = await Order.find()
+            .populate('user', 'name surname email username')
+            .populate('products.product', 'name sku images image price_sale');
         res.status(200).json({ success: true, orders });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

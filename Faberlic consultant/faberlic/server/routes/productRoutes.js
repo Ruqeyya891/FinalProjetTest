@@ -6,6 +6,7 @@ const {
     syncProducts,
     createProduct,
     updateProduct,
+    updateProductStatus,
     deleteProduct,
     importProducts
 } = require('../controllers/productController');
@@ -19,6 +20,7 @@ router.get('/:id', getProductById);
 // Admin routes
 router.post('/', protect, adminOnly, createProduct);
 router.put('/:id', protect, adminOnly, updateProduct);
+router.patch('/:id/status', protect, adminOnly, updateProductStatus);
 router.delete('/:id', protect, adminOnly, deleteProduct);
 router.post('/sync', protect, adminOnly, syncProducts);
 router.post('/import', protect, adminOnly, uploadCSV.single('csvFile'), importProducts);

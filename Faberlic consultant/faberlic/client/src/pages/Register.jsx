@@ -1,37 +1,68 @@
 import React, { useState } from 'react';
-import { User, Mail, Phone, Lock, Eye, EyeOff, ShieldCheck, Heart, ArrowRight, Instagram } from 'lucide-react';
+import { User, Mail, Phone, Eye, EyeOff, ShieldCheck, Heart, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 
 const Register = () => {
-  const [showPassword, setShowPassword] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [accessKey, setAccessKey] = useState('');
+  const [customerCode, setCustomerCode] = useState('');
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    name: '',
-    surname: '',
-    username: '',
-    email: '',
-    password: '',
-    gender: 'female'
+    fullName: '',
+    phone: '',
+    email: ''
   });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.gender !== 'female') {
-      toast.error('Qeydiyyat yalnız xanımlar üçün mümkündür!');
-      return;
-    }
     try {
       const response = await axios.post('http://127.0.0.1:5000/api/users/register', formData);
       if (response.data.success) {
+        setCustomerCode(response.data.user.customerCode);
+        setAccessKey(response.data.accessKey);
+        setShowSuccess(true);
         toast.success('Qeydiyyat uğurla tamamlandı!');
-        navigate('/login');
       }
     } catch (error) {
       toast.error(error.response?.data?.error || 'Qeydiyyat zamanı xəta baş verdi');
     }
   };
+
+  if (showSuccess) {
+    return (
+      <div className="min-h-[calc(100vh-80px)] bg-pink-50/30 flex items-center justify-center p-6 py-12 md:py-24">
+        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl border border-pink-100 overflow-hidden p-10 md:p-14 text-center">
+          <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-8">
+            <CheckCircle2 className="text-green-600" size={48} />
+          </div>
+          <h2 className="text-3xl font-black text-gray-900 mb-4">Qeydiyyat Uğurlu!</h2>
+          <p className="text-gray-500 font-medium mb-8">
+            Müştəri kodunuzu və giriş açarınızı yadda saxlamağı unutmayın!
+          </p>
+
+          <div className="space-y-6 mb-10">
+            <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] mb-2">Müştəri Kodu</p>
+              <p className="text-2xl font-black text-pink-600">{customerCode}</p>
+            </div>
+            <div className="p-6 bg-pink-50 rounded-2xl border border-pink-100">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] mb-2">Giriş Açarı</p>
+              <p className="text-2xl font-black text-pink-700">{accessKey}</p>
+            </div>
+          </div>
+
+          <button 
+            onClick={() => navigate('/login')}
+            className="w-full py-5 bg-pink-600 text-white font-black text-lg rounded-2xl hover:bg-pink-700 transition-all shadow-xl shadow-pink-100 flex items-center justify-center gap-3 active:scale-95"
+          >
+            Giriş Səhifəsinə Qayıt
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-pink-50/30 flex items-center justify-center p-6 py-12 md:py-24">
@@ -75,46 +106,30 @@ const Register = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] px-2">Adınız</label>
-                <div className="relative group">
-                  <User className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600 transition-colors" size={18} />
-                  <input 
-                    type="text" 
-                    placeholder="Məs: Aygün"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full pl-14 pr-6 py-3.5 bg-gray-50 border-2 border-transparent focus:border-pink-200 focus:bg-white rounded-2xl outline-none transition-all text-gray-700 font-medium text-sm"
-                    required
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] px-2">Soyadınız</label>
-                <div className="relative group">
-                  <User className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600 transition-colors" size={18} />
-                  <input 
-                    type="text" 
-                    placeholder="Məs: Məmmədova"
-                    value={formData.surname}
-                    onChange={(e) => setFormData({...formData, surname: e.target.value})}
-                    className="w-full pl-14 pr-6 py-3.5 bg-gray-50 border-2 border-transparent focus:border-pink-200 focus:bg-white rounded-2xl outline-none transition-all text-gray-700 font-medium text-sm"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] px-2">İstifadəçi Adı</label>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] px-2">Ad Soyad</label>
               <div className="relative group">
                 <User className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600 transition-colors" size={18} />
                 <input 
                   type="text" 
-                  placeholder="Məs: aygun_m"
-                  value={formData.username}
-                  onChange={(e) => setFormData({...formData, username: e.target.value})}
+                  placeholder="Məs: Aygün Məmmədova"
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                  className="w-full pl-14 pr-6 py-3.5 bg-gray-50 border-2 border-transparent focus:border-pink-200 focus:bg-white rounded-2xl outline-none transition-all text-gray-700 font-medium text-sm"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] px-2">Telefon Nömrəsi</label>
+              <div className="relative group">
+                <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600 transition-colors" size={18} />
+                <input 
+                  type="tel" 
+                  placeholder="+994 XX XXX XX XX"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   className="w-full pl-14 pr-6 py-3.5 bg-gray-50 border-2 border-transparent focus:border-pink-200 focus:bg-white rounded-2xl outline-none transition-all text-gray-700 font-medium text-sm"
                   required
                 />
@@ -134,41 +149,6 @@ const Register = () => {
                   required
                 />
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] px-2">Şifrə</label>
-              <div className="relative group">
-                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pink-600 transition-colors" size={18} />
-                <input 
-                  type={showPassword ? 'text' : 'password'} 
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  className="w-full pl-14 pr-14 py-3.5 bg-gray-50 border-2 border-transparent focus:border-pink-200 focus:bg-white rounded-2xl outline-none transition-all text-gray-700 font-medium text-sm"
-                  required
-                />
-                <button 
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-pink-600 transition-colors"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 bg-pink-50 rounded-2xl border border-pink-100 flex items-start gap-3">
-              <div className="mt-1 flex-shrink-0">
-                <input 
-                  type="checkbox" 
-                  className="w-4 h-4 text-pink-600 bg-white border-gray-300 rounded focus:ring-pink-500 focus:ring-offset-0 transition-all cursor-pointer"
-                  checked={formData.gender === 'female'}
-                  readOnly
-                />
-              </div>
-              <p className="text-[11px] font-bold text-gray-500 leading-relaxed uppercase tracking-wide">
-                Mən təsdiq edirəm ki, xanımam və Faberlik consultantı ilə əlaqə saxlamağa razıyam.
-              </p>
             </div>
 
             <button className="w-full py-5 bg-pink-600 text-white font-black text-lg rounded-2xl hover:bg-pink-700 transition-all shadow-xl shadow-pink-100 flex items-center justify-center gap-3 active:scale-95 group">

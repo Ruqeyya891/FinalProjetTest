@@ -2,6 +2,16 @@ const mongoose = require('mongoose');
 
 const OrderSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    items: [{
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+        name: { type: String, required: true },
+        sku: { type: String },
+        image: { type: String },
+        price: { type: Number, required: true },
+        quantity: { type: Number, default: 1, required: true },
+        total: { type: Number, required: true }
+    }],
+    // Keep products array for backward compatibility
     products: [{
         product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
         quantity: { type: Number, default: 1 },
@@ -10,7 +20,8 @@ const OrderSchema = new mongoose.Schema({
     totalAmount: { type: Number, required: true },
     status: { type: String, enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'], default: 'pending' },
     paymentStatus: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
-    contactMethod: { type: String, enum: ['whatsapp', 'instagram'], required: true }
+    contactMethod: { type: String, enum: ['whatsapp', 'instagram'], required: true },
+    notes: { type: String }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', OrderSchema);

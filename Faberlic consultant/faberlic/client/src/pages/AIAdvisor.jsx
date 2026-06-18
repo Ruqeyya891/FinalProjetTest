@@ -24,25 +24,32 @@ const AIAdvisor = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Generate or get chat ID
+  // Check auth and load chat
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
+    if (!token) {
+      toast.info('AI məsləhətçi ilə söhbət etmək üçün daxil olmalısınız.');
+      navigate('/login');
+      return;
+    }
+
+    // Try to find existing chat for user
+    const checkExistingChat = async () => {
       try {
-        const decoded = jwtDecode(token);
-        const storedChatId = localStorage.getItem(`chatId_${decoded.id}`);
-        if (storedChatId) {
-          setChatId(storedChatId);
-          // Load existing messages
-          loadExistingMessages(storedChatId, token);
-        } else {
-          setChatId(`chat_${decoded.id}_${Date.now()}`);
+        const response = await axios.get('http://127.0.0.1:5000/api/messages/my-chat', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (response.data) {
+          setChatId(response.data._id.toString());
+          loadExistingMessages(response.data._id.toString(), token);
         }
       } catch (error) {
-        console.error('Token decode error:', error);
+        // If no chat found, that's okay, we'll create one when user sends first message
+        console.log('No existing chat found');
       }
-    }
-  }, []);
+    };
+    checkExistingChat();
+  }, [navigate]);
 
   const loadExistingMessages = async (existingChatId, token) => {
     try {
@@ -68,10 +75,6 @@ const AIAdvisor = () => {
       return;
     }
 
-    const currentChatId = chatId || `chat_${jwtDecode(token).id}_${Date.now()}`;
-    if (!chatId) setChatId(currentChatId);
-    localStorage.setItem(`chatId_${jwtDecode(token).id}`, currentChatId);
-
     const userMessage = { _id: Date.now().toString(), senderType: 'user', text: inputText, createdAt: new Date() };
     setMessages([...messages, userMessage]);
     setInputText('');
@@ -79,16 +82,22 @@ const AIAdvisor = () => {
 
     try {
       const response = await axios.post('http://127.0.0.1:5000/api/messages', {
-        chatId: currentChatId,
+        chatId: chatId,
         text: inputText
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      setMessages(prev => [...prev, response.data.aiMessage]);
+      if (response.data.chatId) {
+        setChatId(response.data.chatId);
+        // Load all messages (in case it's a new chat)
+        loadExistingMessages(response.data.chatId, token);
+      } else {
+        setMessages(prev => [...prev, response.data.aiMessage]);
+      }
     } catch (error) {
       console.error('Chat error:', error);
-      const errorMsg = { _id: Date.now().toString(), senderType: 'ai', text: 'Üzr istəyirik, AI ilə əlaqə qurarkən xəta baş verdi. Zəhmət olmasa bir az sonra yenidən cəhd edin.', createdAt: new Date() };
+      const errorMsg = { _id: Date.now().toString(), senderType: 'ai', text: 'Bağışlayın, hazırda texniki problem var. Zəhmət olmasa daha sonra yenidən cəhd edin.', createdAt: new Date() };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsTyping(false);
@@ -106,10 +115,6 @@ const AIAdvisor = () => {
     if (file) {
       const reader = new FileReader();
       reader.onload = async (event) => {
-        const currentChatId = chatId || `chat_${jwtDecode(token).id}_${Date.now()}`;
-        if (!chatId) setChatId(currentChatId);
-        localStorage.setItem(`chatId_${jwtDecode(token).id}`, currentChatId);
-
         const userMessage = { 
           _id: Date.now().toString(), 
           senderType: 'user', 
@@ -121,13 +126,18 @@ const AIAdvisor = () => {
 
         try {
           const response = await axios.post('http://127.0.0.1:5000/api/messages', {
-            chatId: currentChatId,
+            chatId: chatId,
             text: 'Şəkil yükləndi. Dəri analizi xahiş edirəm.'
           }, {
             headers: { Authorization: `Bearer ${token}` }
           });
 
-          setMessages(prev => [...prev, response.data.aiMessage]);
+          if (response.data.chatId) {
+            setChatId(response.data.chatId);
+            loadExistingMessages(response.data.chatId, token);
+          } else {
+            setMessages(prev => [...prev, response.data.aiMessage]);
+          }
         } catch (error) {
           console.error('Chat error:', error);
         } finally {

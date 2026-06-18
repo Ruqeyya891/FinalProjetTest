@@ -102,7 +102,7 @@ const ProductDetails = () => {
   const fetchRelatedProducts = async (currentProduct) => {
     try {
       const response = await axios.get('http://127.0.0.1:5000/api/products');
-      let products = response.data.filter(p => p._id !== currentProduct._id);
+      let products = response.data.filter(p => p._id !== currentProduct._id && p.status !== 'passive');
       
       // First try to find products from same series
       const seriesProducts = products.filter(p => 
@@ -139,6 +139,11 @@ const ProductDetails = () => {
   };
 
   const handleAction = async (action) => {
+    if (action === 'cart' && (product.status === 'passive' || product.status === 'out_of_stock')) {
+      toast.error('Bu məhsul artıq mövcud deyil');
+      return;
+    }
+    
     const token = localStorage.getItem('token');
     if (!token) {
       toast.info('Bu əməliyyat üçün daxil olmalısınız.');
@@ -171,6 +176,7 @@ const ProductDetails = () => {
 
   const calculateDiscount = () => {
     if (!product) return 0;
+    if (product.discountPercent > 0) return product.discountPercent;
     if (product.price_catalog <= 0 || product.price_catalog <= product.price_sale) return 0;
     const diff = product.price_catalog - product.price_sale;
     return Math.round((diff / product.price_catalog) * 100);
@@ -288,13 +294,23 @@ const ProductDetails = () => {
 
                 {/* Add to Cart & Favorite */}
                 <div className="flex gap-3">
-                  <button 
-                    onClick={() => handleAction('cart')}
-                    className="flex-1 py-4 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-700 transition-all flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <ShoppingCart size={20} />
-                    Səbətə Əlavə Et
-                  </button>
+                  {product.status === 'out_of_stock' ? (
+                    <button 
+                      disabled
+                      className="flex-1 py-4 bg-gray-200 text-gray-500 font-bold rounded-xl cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <ShoppingCart size={20} />
+                      Stokda yoxdur
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => handleAction('cart')}
+                      className="flex-1 py-4 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-700 transition-all flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <ShoppingCart size={20} />
+                      Səbətə Əlavə Et
+                    </button>
+                  )}
                   <button 
                     onClick={() => handleAction('favorite')}
                     className={`w-14 h-14 rounded-xl flex items-center justify-center transition-all border ${
@@ -311,10 +327,21 @@ const ProductDetails = () => {
               {/* Product Trust Indicators */}
               <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center">
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
-                  </div>
-                  <span>Stokda var</span>
+                  {product.status === 'active' ? (
+                    <>
+                      <div className="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center">
+                        <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                      </div>
+                      <span>Stokda var</span>
+                    </>
+                  ) : product.status === 'out_of_stock' ? (
+                    <>
+                      <div className="w-5 h-5 rounded-full bg-orange-50 flex items-center justify-center">
+                        <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                      </div>
+                      <span>Stokda yoxdur</span>
+                    </>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center">

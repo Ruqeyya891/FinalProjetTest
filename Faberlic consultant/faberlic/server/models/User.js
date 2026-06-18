@@ -2,22 +2,15 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
+    fullName: {
       type: String,
       required: true,
       trim: true,
     },
 
-    surname: {
+    phone: {
       type: String,
       required: true,
-      trim: true,
-    },
-
-    username: {
-      type: String,
-      required: true,
-      unique: true,
       trim: true,
     },
 
@@ -29,7 +22,14 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
     },
 
-    password: {
+    customerCode: {
+      type: String,
+      required: true,
+      unique: true,
+      match: /^\d+$/, // Only digits
+    },
+
+    accessKeyHash: {
       type: String,
       required: true,
     },
@@ -40,11 +40,17 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
     },
 
+    // Keep old fields for backward compatibility
+    name: String,
+    surname: String,
+    username: String,
+    password: String,
     gender: {
       type: String,
-      required: true,
-      enum: ["female"], // Only women can register as per user request
+      enum: ["female"],
+      default: "female"
     },
+
     cart: [
       {
         product: {

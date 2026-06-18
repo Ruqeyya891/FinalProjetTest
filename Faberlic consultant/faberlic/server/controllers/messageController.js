@@ -1,38 +1,89 @@
 const Message = require("../models/Message"); 
+const Chat = require("../models/Chat");
 const { generateAIResponse } = require("../services/geminiService"); 
 const User = require("../models/User");
 
+// Get user's chat
+const getMyChat = async (req, res) => {
+  try {
+    const chat = await Chat.findOne({ user: req.user._id });
+    if (!chat) {
+      return res.status(404).json({ message: "Chat tapılmadı" });
+    }
+    res.status(200).json(chat);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const sendMessage = async (req, res) => { 
-    try { 
-      const { chatId, text } = req.body; 
+  try { 
+    const { chatId, text } = req.body; 
+    const userId = req.user._id;
+    
+    // Find or create chat with user data
+    let chat = await Chat.findOne({ user: userId });
+    if (!chat) {
+      // Create new chat
+      chat = await Chat.create({
+        user: userId,
+        userSnapshot: {
+          fullName: req.user.fullName,
+          phone: req.user.phone,
+          email: req.user.email
+        }
+      });
+    } else {
+      // If chat was deleted by admin, restore it
+      if (chat.isDeletedByAdmin) {
+        chat.isDeletedByAdmin = false;
+      }
+      // Update last message date
+      chat.lastMessageDate = new Date();
+      // Update user snapshot (in case user info changed)
+      chat.userSnapshot = {
+        fullName: req.user.fullName,
+        phone: req.user.phone,
+        email: req.user.email
+      };
+      await chat.save();
+    }
 
-      const message = await Message.create({ 
-        chatId, 
-        user: req.user._id, 
-        senderType: "user", 
-        sender: req.user._id, 
-        text 
-      }); 
-      const aiText = await generateAIResponse(text); 
-      const aiMessage = await Message.create({ 
-        chatId, 
-        user: req.user._id, 
-        senderType: "ai", 
-        text: aiText, 
-        isRead: true 
-      }); 
+    const message = await Message.create({ 
+      chatId: chat._id.toString(), // use chat._id as chatId
+      user: userId, 
+      senderType: "user", 
+      sender: userId, 
+      text 
+    }); 
+    
+    // Generate AI response
+    const aiText = await generateAIResponse(text); 
+    const aiMessage = await Message.create({ 
+      chatId: chat._id.toString(), 
+      user: userId, 
+      senderType: "ai", 
+      text: aiText, 
+      isRead: true 
+    }); 
 
-      res.status(201).json({ 
-        userMessage: message, 
-        aiMessage 
-      }); 
+    // Update chat last message date
+    chat.lastMessageDate = new Date();
+    await chat.save();
 
-    } catch (error) { 
-      res.status(500).json({ 
-        message: error.message 
-      }); 
-    } 
-  }; 
+    res.status(201).json({ 
+      userMessage: message, 
+      aiMessage,
+      chatId: chat._id.toString()
+    }); 
+
+  } catch (error) { 
+    console.error('Send message error:', error);
+    res.status(500).json({ 
+      message: error.message 
+    }); 
+  } 
+}; 
   
 const getMessages = async (req, res) => { 
   try { 
@@ -81,13 +132,16 @@ const adminJoinChat = async (req, res) => {
       text: "Admin söhbətə qoşuldu" 
     }); 
 
+    // Mark chat as admin intervened
+    await Chat.findOneAndUpdate({ _id: chatId }, { adminIntervened: true });
+
     res.status(201).json(message); 
   } catch (error) { 
     res.status(500).json({ 
       message: error.message 
     }); 
   } 
-}; 
+};
 
 
 const markMessagesAsRead = async (req, res) =>{ 
@@ -112,98 +166,42 @@ const markMessagesAsRead = async (req, res) =>{
         message:error.message 
       }); 
     } 
-}; 
-
-
-const getUnreadChats = async (req, res) =>{ 
-try { 
-    const unreadChats = await Message.aggregate([ 
-      { 
-        $match:{ 
-          senderType:"user", 
-          isRead:false 
-        } 
-      }, 
-      { 
-        $group:{ 
-          _id:"$chatId", 
-          unreadCount:{$sum:1}    
-        } 
-      } 
-    ]); 
-    res.status(200).json(unreadChats); 
-} catch(error) { 
-    res.status(500).json({ 
-      message:error.message 
-    }); 
-} 
-}; 
+};
 
 
 const getChatList = async (req, res) => { 
   try { 
-    const chats = await Message.aggregate([ 
-      { 
-        $sort: { createdAt: -1 } 
-      }, 
-      { 
-        $group: { 
-          _id: "$chatId", 
+    // Get all chats not deleted by admin, sorted by last message date
+    const chats = await Chat.find({ isDeletedByAdmin: false }).sort({ lastMessageDate: -1 });
 
-          lastMessage: { 
-            $first: "$text" 
-          }, 
+    // For each chat, get last message and unread count
+    const chatList = await Promise.all(chats.map(async (chat) => {
+      const lastMessage = await Message.findOne({ chatId: chat._id.toString() }).sort({ createdAt: -1 });
+      const unreadCount = await Message.countDocuments({ 
+        chatId: chat._id.toString(), 
+        senderType: "user", 
+        isRead: false 
+      });
 
-          lastSenderType: { 
-            $first: "$senderType" 
-          }, 
-
-          lastMessageDate: { 
-            $first: "$createdAt" 
-          }, 
-
-          user: { 
-            $first: "$user" 
-          }, 
-
-          unreadCount: { 
-            $sum: { 
-              $cond: [ 
-                { 
-                  $and: [ 
-                    { $eq: ["$senderType", "user"] }, 
-                    { $ne: ["$isRead", true] } 
-                  ] 
-                }, 
-                1, 
-                0 
-              ] 
-            } 
-          } 
-        } 
-      }, 
-      { 
-        $sort: { 
-          lastMessageDate: -1 
-        } 
-      } 
-    ]); 
-
-    // Populate user info 
-    const populatedChats = await Promise.all(chats.map(async (chat) => {
-      if (chat.user) {
-        chat.user = await User.findById(chat.user).select('name surname username email');
-      }
-      return chat;
+      return {
+        _id: chat._id.toString(),
+        user: chat.user,
+        userSnapshot: chat.userSnapshot,
+        lastMessage: lastMessage ? lastMessage.text : '',
+        lastMessageDate: chat.lastMessageDate,
+        unreadCount: unreadCount,
+        adminIntervened: chat.adminIntervened
+      };
     }));
 
-    res.status(200).json(populatedChats); 
+    res.status(200).json(chatList); 
   } catch (error) { 
+    console.error('Get chat list error:', error);
     res.status(500).json({ 
       message: error.message 
     }); 
   } 
-}; 
+};
 
 
 const adminReply = async (req, res) =>{ 
@@ -230,16 +228,38 @@ const adminReply = async (req, res) =>{
         message:error.message 
       }); 
     } 
-  }; 
-  
+  };
 
+
+// New function: hide chat from admin
+const hideChat = async (req, res) => {
+  try {
+    const { chatId } = req.body;
+    await Chat.findOneAndUpdate({ _id: chatId }, { isDeletedByAdmin: true });
+    res.status(200).json({ message: "Söhbət gizləndildi" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// New function: get single chat
+const getChat = async (req, res) => {
+  try {
+    const chat = await Chat.findOne({ _id: req.params.chatId });
+    res.status(200).json(chat);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 
 module.exports = { 
   sendMessage, 
   getMessages, 
   adminJoinChat, 
   markMessagesAsRead, 
-  getUnreadChats, 
   getChatList, 
-  adminReply 
+  adminReply,
+  hideChat,
+  getChat,
+  getMyChat
 };

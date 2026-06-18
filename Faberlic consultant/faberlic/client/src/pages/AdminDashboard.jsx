@@ -83,6 +83,7 @@ const AdminDashboard = () => {
   const [adminMessage, setAdminMessage] = useState('');
   const [orders, setOrders] = useState([]);
   const [users, setUsers] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null); // For order details modal
   const [statsData, setStatsData] = useState({
     totalRevenue: 0,
     totalUsers: 0,
@@ -102,12 +103,15 @@ const AdminDashboard = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState({ id: null, type: null });
+  const [isHideChatModalOpen, setIsHideChatModalOpen] = useState(false);
+  const [chatToHide, setChatToHide] = useState(null);
   const [productForm, setProductForm] = useState({
     name: '',
     description: '',
     price_catalog: '',
     price_anbar: '',
     price_sale: '',
+    discountPercent: '',
     categoryName: '',
     categorySlug: '',
     subCategoryName: '',
@@ -465,7 +469,7 @@ const AdminDashboard = () => {
       setIsProductModalOpen(false);
       setEditingProduct(null);
       setProductForm({
-        name: '', description: '', price_catalog: '', price_anbar: '', price_sale: '',
+        name: '', description: '', price_catalog: '', price_anbar: '', price_sale: '', discountPercent: '',
         categoryName: '', categorySlug: '', subCategoryName: '', subCategorySlug: '',
         childCategoryName: '', childCategorySlug: '', sku: '', stock: '', isActive: true,
         status: 'active',
@@ -483,16 +487,28 @@ const AdminDashboard = () => {
   };
 
   const updateProductStatus = async (productId, newStatus) => {
+    console.log("Updating status:", productId, newStatus);
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`http://127.0.0.1:5000/api/products/${productId}`, {
+      const response = await axios.patch(`http://127.0.0.1:5000/api/products/${productId}/status`, {
         status: newStatus
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      fetchProducts();
+      
+      console.log("Full response:", response);
+      
+      // Update the product in state immediately for better UX
+      setProducts(prevProducts => 
+        prevProducts.map(p => 
+          p._id === productId ? { ...p, status: response.data.product ? response.data.product.status : response.data.status } : p
+        )
+      );
+      
+      toast.success('Status dəyişdirildi');
     } catch (error) {
-      console.error('Error updating status:', error);
+      console.error("Error updating status:", error.response?.data || error.message);
+      toast.error(error.response?.data?.message || 'Status dəyişdirilə bilmədi');
     }
   };
 
@@ -540,6 +556,20 @@ const AdminDashboard = () => {
       });
       fetchCatalogs();
       toast.success('Kataloq silindi');
+    } catch (error) {
+      toast.error('Xəta baş verdi');
+    }
+  };
+
+  const hideChat = async (chatId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('http://127.0.0.1:5000/api/messages/hide', { chatId }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchActiveChats();
+      setSelectedChat(null);
+      toast.success('Söhbət gizləndildi');
     } catch (error) {
       toast.error('Xəta baş verdi');
     }
@@ -934,16 +964,16 @@ const AdminDashboard = () => {
                         </td>
                         <td className="px-6 py-5">
                           <select 
-                            value={product.status || (product.isActive ? 'active' : 'inactive')} 
+                            value={product.status || (product.isActive ? 'active' : 'passive')} 
                             onChange={(e) => updateProductStatus(product._id, e.target.value)}
                             className={`px-3 py-2 rounded-lg text-xs font-bold uppercase border-none outline-none cursor-pointer transition-colors ${
-                              product.status === 'active' || product.isActive ? 'bg-green-100 text-green-700' : 
-                              product.status === 'inactive' ? 'bg-gray-100 text-gray-700' : 
-                              'bg-orange-100 text-orange-700'
+                              product.status === 'active' || (product.isActive && !product.status) ? 'bg-[#dcfce7] text-[#15803d]' : 
+                              product.status === 'passive' ? 'bg-[#e5e7eb] text-[#374151]' : 
+                              'bg-[#fee2e2] text-[#dc2626]'
                             }`}
                           >
                             <option value="active">Aktiv</option>
-                            <option value="inactive">Passiv</option>
+                            <option value="passive">Passiv</option>
                             <option value="out_of_stock">Stokda yoxdur</option>
                           </select>
                         </td>
@@ -958,6 +988,7 @@ const AdminDashboard = () => {
                                   price_catalog: product.price_catalog || '',
                                   price_anbar: product.price_anbar || '',
                                   price_sale: product.price_sale || '',
+                                  discountPercent: product.discountPercent || '',
                                   categoryName: product.categoryName || product.category || '',
                                   categorySlug: product.categorySlug || '',
                                   subCategoryName: product.subCategoryName || '',
@@ -967,7 +998,7 @@ const AdminDashboard = () => {
                                   sku: product.sku || '',
                                   stock: product.stock || '',
                                   isActive: product.isActive !== false,
-                                  status: product.status || (product.isActive ? 'active' : 'inactive'),
+                                  status: product.status || (product.isActive ? 'active' : 'passive'),
                                   images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [''],
                                   isInStock: product.isInStock !== false,
                                   isSuperPrice: product.isSuperPrice === true,
@@ -1129,6 +1160,57 @@ const AdminDashboard = () => {
                     
                     {/* Prices */}
                     <div className="space-y-1">
+                      <label className="text-sm font-semibold text-gray-700">Köhnə qiymət / Kataloq qiyməti</label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        step="0.01" 
+                        inputMode="decimal" 
+                        placeholder="Kataloq Qiyməti" 
+                        value={productForm.price_catalog} 
+                        onChange={e => {
+                          let val = e.target.value;
+                          if (val < 0) val = 0;
+                          const newForm = {...productForm, price_catalog: val};
+                          // Auto calculate sale price if discount exists
+                          if (newForm.price_catalog && newForm.discountPercent) {
+                            const oldPrice = parseFloat(newForm.price_catalog);
+                            const discount = parseFloat(newForm.discountPercent);
+                            newForm.price_sale = (oldPrice - (oldPrice * discount / 100)).toFixed(2);
+                          }
+                          setProductForm(newForm);
+                        }} 
+                        className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full ${formErrors.price_catalog ? 'border border-red-500' : ''}`} 
+                      />
+                      {formErrors.price_catalog && <p className="text-red-500 text-xs mt-1">{formErrors.price_catalog}</p>}
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-semibold text-gray-700">Endirim faizi %</label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        max="100" 
+                        step="0.01" 
+                        inputMode="decimal" 
+                        placeholder="Endirim faizi" 
+                        value={productForm.discountPercent} 
+                        onChange={e => {
+                          let val = e.target.value;
+                          if (val < 0) val = 0;
+                          if (val > 100) val = 100;
+                          const newForm = {...productForm, discountPercent: val};
+                          // Auto calculate sale price
+                          if (newForm.price_catalog) {
+                            const oldPrice = parseFloat(newForm.price_catalog);
+                            const discount = parseFloat(newForm.discountPercent || 0);
+                            newForm.price_sale = (oldPrice - (oldPrice * discount / 100)).toFixed(2);
+                          }
+                          setProductForm(newForm);
+                        }} 
+                        className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" 
+                      />
+                    </div>
+                    <div className="space-y-1">
                       <label className="text-sm font-semibold text-gray-700">Satış Qiyməti *</label>
                       <input 
                         type="number" 
@@ -1145,24 +1227,6 @@ const AdminDashboard = () => {
                         className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full ${formErrors.price_sale ? 'border border-red-500' : ''}`} 
                       />
                       {formErrors.price_sale && <p className="text-red-500 text-xs mt-1">{formErrors.price_sale}</p>}
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-semibold text-gray-700">Kataloq Qiyməti</label>
-                      <input 
-                        type="number" 
-                        min="0" 
-                        step="0.01" 
-                        inputMode="decimal" 
-                        placeholder="Kataloq Qiyməti" 
-                        value={productForm.price_catalog} 
-                        onChange={e => {
-                          let val = e.target.value;
-                          if (val < 0) val = 0;
-                          setProductForm({...productForm, price_catalog: val});
-                        }} 
-                        className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full ${formErrors.price_catalog ? 'border border-red-500' : ''}`} 
-                      />
-                      {formErrors.price_catalog && <p className="text-red-500 text-xs mt-1">{formErrors.price_catalog}</p>}
                     </div>
                     <div className="space-y-1">
                       <label className="text-sm font-semibold text-gray-700">Anbar Qiyməti</label>
@@ -1294,10 +1358,14 @@ const AdminDashboard = () => {
                       <select 
                         value={productForm.status} 
                         onChange={(e) => setProductForm({...productForm, status: e.target.value})}
-                        className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none"
+                        className={`w-full px-6 py-4 rounded-2xl outline-none ${
+                          productForm.status === 'active' ? 'bg-[#dcfce7] text-[#15803d]' : 
+                          productForm.status === 'passive' ? 'bg-[#e5e7eb] text-[#374151]' : 
+                          'bg-[#fee2e2] text-[#dc2626]'
+                        }`}
                       >
                         <option value="active">Aktiv</option>
-                        <option value="inactive">Passiv</option>
+                        <option value="passive">Passiv</option>
                         <option value="out_of_stock">Stokda yoxdur</option>
                       </select>
                     </div>
@@ -1444,6 +1512,7 @@ const AdminDashboard = () => {
                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Məbləğ</th>
                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Tarix</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Detallar</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -1472,10 +1541,157 @@ const AdminDashboard = () => {
                         </select>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</td>
+                      <td className="px-6 py-4">
+                        <button 
+                          onClick={() => setSelectedOrder(order)}
+                          className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all"
+                        >
+                          <Eye size={20} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Order Details Modal */}
+        {selectedOrder && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[40px] w-full max-w-4xl max-h-[90vh] overflow-y-auto p-8 md:p-12">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-bold text-gray-900">Sifariş Detalları</h3>
+                <button onClick={() => setSelectedOrder(null)}><X size={24} /></button>
+              </div>
+
+              {/* Order Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Sifariş No</p>
+                  <p className="text-lg font-bold text-gray-900">#{selectedOrder._id.slice(-6)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Sifariş Tarixi</p>
+                  <p className="text-lg font-bold text-gray-900">{new Date(selectedOrder.createdAt).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Müştəri</p>
+                  <p className="text-lg font-bold text-gray-900">{selectedOrder.user?.name} {selectedOrder.user?.surname}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Email</p>
+                  <p className="text-lg font-bold text-gray-900">{selectedOrder.user?.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Ödəniş Statusu</p>
+                  <p className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${selectedOrder.paymentStatus === 'paid' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                    {selectedOrder.paymentStatus === 'paid' ? 'Ödənilib' : 'Ödənilməyib'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Sifariş Statusu</p>
+                  <p className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
+                    selectedOrder.status === 'pending' ? 'bg-yellow-100 text-yellow-600' : 
+                    selectedOrder.status === 'delivered' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                  }`}>
+                    {selectedOrder.status === 'pending' ? 'Gözləmədə' : 
+                     selectedOrder.status === 'processing' ? 'Hazırlanır' : 
+                     selectedOrder.status === 'shipped' ? 'Yolda' : 
+                     selectedOrder.status === 'delivered' ? 'Çatdırıldı' : 'Ləğv edildi'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Order Items */}
+              <div className="mb-8">
+                <h4 className="text-xl font-bold text-gray-900 mb-4">Sifariş Edilən Məhsullar</h4>
+                <div className="space-y-4">
+                  {(() => {
+                    // Check if we have items array
+                    if (selectedOrder.items && selectedOrder.items.length > 0) {
+                      return selectedOrder.items.map((item, index) => (
+                        <div key={index} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                          {item.image && (
+                            <img 
+                              src={item.image} 
+                              alt={item.name} 
+                              className="w-20 h-20 rounded-xl object-cover"
+                            />
+                          )}
+                          <div className="flex-grow">
+                            <p className="font-bold text-gray-900">{item.name}</p>
+                            {item.sku && <p className="text-xs text-gray-500">SKU: {item.sku}</p>}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-gray-500">Miqdar: {item.quantity} ədəd</p>
+                            <p className="text-sm text-gray-500">1 ədəd: {item.price} AZN</p>
+                            <p className="font-bold text-pink-600">Cəmi: {item.total} AZN</p>
+                          </div>
+                        </div>
+                      ));
+                    }
+                    // Check if we have products array (backward compatibility)
+                    else if (selectedOrder.products && selectedOrder.products.length > 0) {
+                      return selectedOrder.products.map((p, index) => {
+                        const item = {
+                          productId: p.product?._id,
+                          name: p.product?.name || 'Məhsul adı yoxdur',
+                          sku: p.product?.sku,
+                          image: p.product?.images?.[0] || p.product?.image,
+                          price: p.price,
+                          quantity: p.quantity,
+                          total: p.price * p.quantity
+                        };
+                        
+                        return (
+                          <div key={index} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                            {item.image && (
+                              <img 
+                                src={item.image} 
+                                alt={item.name} 
+                                className="w-20 h-20 rounded-xl object-cover"
+                              />
+                            )}
+                            <div className="flex-grow">
+                              <p className="font-bold text-gray-900">{item.name}</p>
+                              {item.sku && <p className="text-xs text-gray-500">SKU: {item.sku}</p>}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-gray-500">Miqdar: {item.quantity} ədəd</p>
+                              <p className="text-sm text-gray-500">1 ədəd: {item.price} AZN</p>
+                              <p className="font-bold text-pink-600">Cəmi: {item.total} AZN</p>
+                            </div>
+                          </div>
+                        );
+                      });
+                    }
+                    // If no items at all
+                    else {
+                      return (
+                        <div className="p-8 bg-gray-50 rounded-2xl text-center">
+                          <p className="text-gray-500">Bu sifarişdə məhsul məlumatı yoxdur</p>
+                        </div>
+                      );
+                    }
+                  })()}
+                </div>
+              </div>
+
+              {/* Total Amount */}
+              <div className="p-6 bg-pink-50 rounded-3xl">
+                <div className="flex justify-between items-center">
+                <p className="text-lg font-bold text-gray-900">Ümumi Məbləğ</p>
+                <p className="text-2xl font-bold text-pink-600">{selectedOrder.totalAmount} AZN</p>
+              </div>
+                {selectedOrder.notes && (
+                  <div className="mt-4 pt-4 border-t border-pink-100">
+                    <p className="text-sm text-gray-500 mb-1">Qeyd</p>
+                    <p className="text-gray-900">{selectedOrder.notes}</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1514,13 +1730,32 @@ const AdminDashboard = () => {
               <div className="p-6 border-b bg-pink-50 font-bold">Aktiv Söhbətlər</div>
               <div className="divide-y overflow-y-auto">
                 {activeChats.map(chat => (
-                  <button key={chat._id} onClick={() => handleSelectChat(chat)} className={`w-full p-6 text-left hover:bg-pink-50 ${selectedChat?._id === chat._id ? 'bg-pink-50 border-l-4 border-pink-600' : ''}`}>
-                    <p className="font-bold">{chat.user?.name || 'Anonim'} {chat.user?.surname || ''}</p>
-                    <p className="text-xs text-gray-400 truncate">{chat.lastMessage}</p>
-                    {chat.unreadCount > 0 && (
-                      <span className="inline-block mt-1 px-2 py-1 bg-pink-600 text-white text-[10px] font-bold rounded-full">{chat.unreadCount} yeni</span>
-                    )}
-                  </button>
+                  <div key={chat._id} className={`w-full p-4 hover:bg-pink-50 ${selectedChat?._id === chat._id ? 'bg-pink-50 border-l-4 border-pink-600' : ''}`}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-bold text-sm">{chat.userSnapshot?.fullName || 'Müştəri'}</p>
+                        <p className="text-xs text-gray-500 truncate">{chat.userSnapshot?.email}</p>
+                        <p className="text-xs text-gray-400 truncate">{chat.lastMessage}</p>
+                        {chat.unreadCount > 0 && (
+                          <span className="inline-block mt-1 px-2 py-1 bg-pink-600 text-white text-[10px] font-bold rounded-full">{chat.unreadCount} yeni</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <button 
+                        onClick={() => handleSelectChat(chat)} 
+                        className="flex-1 py-2 bg-blue-50 text-blue-600 font-semibold rounded-xl text-xs hover:bg-blue-100 transition-all"
+                      >
+                        Detallar
+                      </button>
+                      <button 
+                        onClick={() => { setChatToHide(chat._id); setIsHideChatModalOpen(true); }} 
+                        className="flex-1 py-2 bg-gray-100 text-gray-600 font-semibold rounded-xl text-xs hover:bg-gray-200 transition-all"
+                      >
+                        Gizlət
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -1528,8 +1763,19 @@ const AdminDashboard = () => {
               {selectedChat ? (
                 <>
                   <div className="p-6 bg-pink-600 text-white rounded-t-3xl flex justify-between items-center">
-                    <p className="font-bold">{selectedChat.user?.name || 'Anonim'} {selectedChat.user?.surname || ''}</p>
-                    {!selectedChat.adminIntervened && <button onClick={() => joinChat(selectedChat._id)} className="px-4 py-2 bg-white text-pink-600 rounded-xl font-bold text-sm">Söhbətə Qoşul</button>}
+                    <div>
+                      <p className="font-bold">{selectedChat.userSnapshot?.fullName || 'Müştəri'}</p>
+                      <p className="text-pink-200 text-xs">{selectedChat.userSnapshot?.email} • {selectedChat.userSnapshot?.phone}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      {!selectedChat.adminIntervened && <button onClick={() => joinChat(selectedChat._id)} className="px-4 py-2 bg-white text-pink-600 rounded-xl font-bold text-sm">Söhbətə Qoşul</button>}
+                      <button 
+                        onClick={() => { setChatToHide(selectedChat._id); setIsHideChatModalOpen(true); }} 
+                        className="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold text-sm"
+                      >
+                        Söhbəti Gizlət
+                      </button>
+                    </div>
                   </div>
                   <div className="flex-grow p-6 overflow-y-auto space-y-4 bg-pink-50/10">
                     {selectedChat.messages.map((m, i) => (
@@ -1579,6 +1825,36 @@ const AdminDashboard = () => {
                   className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all shadow-lg"
                 >
                   Sil
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hide Chat Confirmation Modal */}
+      {isHideChatModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <div className="text-center">
+              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Eye size={40} className="text-gray-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">Söhbəti gizlətmək istəyirsiniz?</h3>
+              <p className="text-gray-600 mb-8">Bu söhbət admin panelindən gizlənəcək, lakin istifadəçi tərəfindən silinməyəcək.</p>
+              
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => { setIsHideChatModalOpen(false); setChatToHide(null); }} 
+                  className="flex-1 py-4 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition-all"
+                >
+                  Ləğv et
+                </button>
+                <button 
+                  onClick={() => { hideChat(chatToHide); setIsHideChatModalOpen(false); setChatToHide(null); }} 
+                  className="flex-1 py-4 bg-pink-600 text-white font-bold rounded-2xl hover:bg-pink-700 transition-all shadow-lg"
+                >
+                  Gizlət
                 </button>
               </div>
             </div>
