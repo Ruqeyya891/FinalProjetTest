@@ -30,6 +30,35 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    catalogPrices: [
+      {
+        catalogId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "CatalogCycle",
+          required: true,
+        },
+        catalogPrice: {
+          type: Number,
+          required: true,
+        },
+        salePrice: {
+          type: Number,
+          required: true,
+        },
+        discountPercent: {
+          type: Number,
+          default: 0,
+        },
+        isPromotion: {
+          type: Boolean,
+          default: false,
+        },
+        isSuperPrice: {
+          type: Boolean,
+          default: false,
+        },
+      },
+    ],
 
     images: {
       type: [String],
@@ -53,6 +82,7 @@ const productSchema = new mongoose.Schema(
       value: { type: Number, min: 0, default: null },
       unit: { type: String, enum: ['ml', 'l'], default: 'ml' }
     },
+    // Old category fields (backward compatibility)
     categorySlug: {
       type: String,
       default: "",
@@ -73,6 +103,17 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // New categories array for multiple categories
+    categories: [
+      {
+        categoryName: { type: String, required: true },
+        categorySlug: { type: String, required: true },
+        subCategoryName: { type: String, default: "" },
+        subCategorySlug: { type: String, default: "" },
+        childCategoryName: { type: String, default: "" },
+        childCategorySlug: { type: String, default: "" }
+      }
+    ],
 
     // New filter fields
     isInStock: { type: Boolean, default: true }, // Anbarda var
@@ -138,7 +179,7 @@ const productSchema = new mongoose.Schema(
   }
 );
 
-// Pre-save middleware: sync isActive and auto-set status based on stock
+// Pre-save middleware: sync isActive, auto-set status, and copy categories to old fields
 productSchema.pre('save', function(next) {
   if (typeof next === 'function') {
     if (this.stock > 0 && this.status !== 'passive') {
@@ -150,11 +191,23 @@ productSchema.pre('save', function(next) {
     } else if (this.status === 'passive') {
       this.isActive = false;
     }
+
+    // Copy first category to old single-category fields for backward compatibility
+    if (this.categories && this.categories.length > 0) {
+      const firstCat = this.categories[0];
+      this.categoryName = firstCat.categoryName;
+      this.categorySlug = firstCat.categorySlug;
+      this.subCategoryName = firstCat.subCategoryName;
+      this.subCategorySlug = firstCat.subCategorySlug;
+      this.childCategoryName = firstCat.childCategoryName;
+      this.childCategorySlug = firstCat.childCategorySlug;
+    }
+
     next();
   }
 });
 
-// Pre-update middleware: sync isActive and auto-set status based on stock
+// Pre-update middleware: sync isActive, auto-set status, and copy categories to old fields
 productSchema.pre('findOneAndUpdate', function(next) {
   if (typeof next === 'function') {
     const update = this.getUpdate();
@@ -176,6 +229,17 @@ productSchema.pre('findOneAndUpdate', function(next) {
           update.status = 'out_of_stock';
           update.isActive = false;
         }
+      }
+
+      // Copy first category to old single-category fields for backward compatibility
+      if (update.categories && update.categories.length > 0) {
+        const firstCat = update.categories[0];
+        update.categoryName = firstCat.categoryName;
+        update.categorySlug = firstCat.categorySlug;
+        update.subCategoryName = firstCat.subCategoryName;
+        update.subCategorySlug = firstCat.subCategorySlug;
+        update.childCategoryName = firstCat.childCategoryName;
+        update.childCategorySlug = firstCat.childCategorySlug;
       }
     }
     next();

@@ -1,13 +1,27 @@
 const Product = require('../models/Product');
-const { parseFaberlicProducts } = require('../utils/scraper');
-const { categories, slugify } = require('../utils/categories');
+const CatalogCycle = require('../models/CatalogCycle');
+const Series = require('../models/Series');
+const { parseFaberlicProducts, scrapeFaberlicCatalog, generateExcelFromProducts } = require('../utils/scraper');
+const { categories } = require('../utils/categories');
+const slugify = require('../utils/slugify');
 const Papa = require('papaparse');
 const fs = require('fs');
+const path = require('path');
+
+// Helper function to get active catalog
+const getActiveCatalog = async () => {
+  const now = new Date();
+  return await CatalogCycle.findOne({
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+    isActive: true,
+  });
+};
 
 // @desc Get all products
 // @route GET /api/products
 const getProducts = async (req, res) => {
-    try {
+  try {
         const { 
           category, 
           subcategory, 
@@ -31,71 +45,100 @@ const getProducts = async (req, res) => {
           maxPrice
         } = req.query;
         let query = {};
+        let andConditions = [];
 
         // Regular users only see active OR out_of_stock products (not passive)
         if (!isAdmin) {
-            query.status = { $ne: 'passive' };
+            andConditions.push({ status: { $ne: 'passive' } });
         }
 
-        // Category filtering logic - filter by all present category slugs together
+        // Category filtering logic with backward compatibility
         if (category) {
-            query.categorySlug = category;
-        }
-        if (subcategory) {
-            query.subCategorySlug = subcategory;
-        }
-        if (childCategory) {
-            query.childCategorySlug = childCategory;
+            // Match either in categories array OR in old single category fields
+            andConditions.push({
+                $or: [
+                    { 
+                        'categories.categorySlug': category,
+                        ...(subcategory && { 'categories.subCategorySlug': subcategory }),
+                        ...(childCategory && { 'categories.childCategorySlug': childCategory })
+                    },
+                    {
+                        categorySlug: category,
+                        ...(subcategory && { subCategorySlug: subcategory }),
+                        ...(childCategory && { childCategorySlug: childCategory })
+                    }
+                ]
+            });
         }
 
         // Boolean filters - if user explicitly requests, use their choice
         if (isInStock !== undefined && isInStock !== null) {
-            query.isInStock = isInStock === 'true';
+            andConditions.push({ isInStock: isInStock === 'true' });
         }
         
-        if (isSuperPrice === 'true') query.isSuperPrice = true;
-        if (isNew === 'true') query.isNew = true;
+        if (isSuperPrice === 'true') andConditions.push({ isSuperPrice: true });
+        if (isNew === 'true') andConditions.push({ isNew: true });
         
         // Handle OR logic for discount and promotion if both are requested
         if (isDiscount === 'true' && isPromotion === 'true') {
-            query.$or = [{ isDiscount: true }, { isPromotion: true }];
+            andConditions.push({ $or: [{ isDiscount: true }, { isPromotion: true }] });
         } else {
-            if (isDiscount === 'true') query.isDiscount = true;
-            if (isPromotion === 'true') query.isPromotion = true;
+            if (isDiscount === 'true') andConditions.push({ isDiscount: true });
+            if (isPromotion === 'true') andConditions.push({ isPromotion: true });
         }
         
-        if (isHit === 'true') query.isHit = true;
+        if (isHit === 'true') andConditions.push({ isHit: true });
 
         // String filters
-        if (collection) query.collection = collection;
-        if (series) query.seriesSlug = series;
-        if (productType) query.productType = productType;
-        if (productEffect) query.productEffect = productEffect;
-        if (skinType) query.skinType = skinType;
-        if (hairType) query.hairType = hairType;
-
-        // Price range filter
-        if (minPrice || maxPrice) {
-            query.price_sale = {};
-            if (minPrice) query.price_sale.$gte = Number(minPrice);
-            if (maxPrice) query.price_sale.$lte = Number(maxPrice);
-        }
+        if (collection) andConditions.push({ collection });
+        if (series) andConditions.push({ seriesSlug: series });
+        if (productType) andConditions.push({ productType });
+        if (productEffect) andConditions.push({ productEffect });
+        if (skinType) andConditions.push({ skinType });
+        if (hairType) andConditions.push({ hairType });
 
         // Search filter - search across multiple fields
         if (search) {
-            query.$or = [
-                { name: { $regex: search, $options: 'i' } },
-                { sku: { $regex: search, $options: 'i' } },
-                { article: { $regex: search, $options: 'i' } },
-                { artikul: { $regex: search, $options: 'i' } },
-                { seriesName: { $regex: search, $options: 'i' } },
-                { seriesSlug: { $regex: search, $options: 'i' } },
-                { collection: { $regex: search, $options: 'i' } }
-            ];
+            andConditions.push({
+                $or: [
+                    { name: { $regex: search, $options: 'i' } },
+                    { sku: { $regex: search, $options: 'i' } },
+                    { article: { $regex: search, $options: 'i' } },
+                    { artikul: { $regex: search, $options: 'i' } },
+                    { seriesName: { $regex: search, $options: 'i' } },
+                    { seriesSlug: { $regex: search, $options: 'i' } },
+                    { collection: { $regex: search, $options: 'i' } }
+                ]
+            });
+        }
+
+        // Build the final query
+        if (andConditions.length > 0) {
+            query = { $and: andConditions };
         }
 
         const products = await Product.find(query);
-        res.status(200).json(products);
+        const activeCatalog = await getActiveCatalog();
+        
+        // Add active catalog price to each product
+        const productsWithActivePrice = products.map(product => {
+            const productObj = product.toObject();
+            if (activeCatalog && product.catalogPrices) {
+                const activePrice = product.catalogPrices.find(
+                    cp => cp.catalogId.toString() === activeCatalog._id.toString()
+                );
+                productObj.activeCatalogPrice = activePrice;
+                productObj.hasActiveCatalogPrice = !!activePrice;
+                productObj.activeCatalog = activeCatalog;
+            } else {
+                productObj.activeCatalogPrice = null;
+                productObj.hasActiveCatalogPrice = false;
+                productObj.activeCatalog = null;
+            }
+            return productObj;
+        });
+        
+        res.status(200).json(productsWithActivePrice);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -118,7 +161,24 @@ const getProductById = async (req, res) => {
         if (!product) {
             return res.status(404).json({ message: 'Məhsul tapılmadı' });
         }
-        res.status(200).json(product);
+        
+        const productObj = product.toObject();
+        const activeCatalog = await getActiveCatalog();
+        
+        if (activeCatalog && product.catalogPrices) {
+            const activePrice = product.catalogPrices.find(
+                cp => cp.catalogId.toString() === activeCatalog._id.toString()
+            );
+            productObj.activeCatalogPrice = activePrice;
+            productObj.hasActiveCatalogPrice = !!activePrice;
+            productObj.activeCatalog = activeCatalog;
+        } else {
+            productObj.activeCatalogPrice = null;
+            productObj.hasActiveCatalogPrice = false;
+            productObj.activeCatalog = null;
+        }
+        
+        res.status(200).json(productObj);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -328,6 +388,55 @@ const deleteProduct = async (req, res) => {
     }
 };
 
+// @desc Scrape Faberlic catalog and generate Excel
+// @route POST /api/products/scrape-and-export
+const scrapeAndExport = async (req, res) => {
+  console.log("SCRAPE STARTED");
+  console.log("Request body:", req.body);
+  
+  try {
+    const { catalogUrl } = req.body;
+    if (!catalogUrl) {
+      return res.status(400).json({ success: false, message: 'Kataloq linki daxil edilməlidir' });
+    }
+    console.log("URL:", catalogUrl);
+
+    // Scrape products
+    const scrapeResult = await scrapeFaberlicCatalog(catalogUrl);
+    if (!scrapeResult.success) {
+      return res.status(500).json(scrapeResult);
+    }
+
+    // Generate Excel file name with timestamp
+    const timestamp = Date.now();
+    const fileName = `faberlic_products_${timestamp}.xlsx`;
+
+    // Generate Excel
+    const excelResult = generateExcelFromProducts(scrapeResult.products, fileName);
+    if (!excelResult.success) {
+      return res.status(500).json(excelResult);
+    }
+
+    // Log the results
+    console.log(`Scraping summary: ${scrapeResult.pageCount} pages, ${scrapeResult.products.length} products found`);
+
+    // Return file URL (assuming we serve uploads from /uploads)
+    res.status(200).json({
+      success: true,
+      products: scrapeResult.products,
+      pageCount: scrapeResult.pageCount,
+      productCount: scrapeResult.products.length,
+      downloadUrl: `/uploads/${fileName}`
+    });
+  } catch (error) {
+    console.error("SCRAPE ERROR:", error);
+    return res.status(500).json({
+      message: error.message,
+      stack: error.stack
+    });
+  }
+};
+
 module.exports = {
     getProducts,
     getProductById,
@@ -336,5 +445,6 @@ module.exports = {
     updateProduct,
     updateProductStatus,
     deleteProduct,
-    importProducts
+    importProducts,
+    scrapeAndExport
 };

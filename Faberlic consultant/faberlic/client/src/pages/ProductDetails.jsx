@@ -211,121 +211,128 @@ const ProductDetails = () => {
         </nav>
 
         {/* Main Content - 3 Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[80px_1fr_360px] gap-4 lg:gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[90px_1fr_420px] gap-8 lg:gap-8 items-start max-w-[1400px] mx-auto">
           {/* Left Column: Thumbnail Gallery */}
-          {images.length > 1 && (
-            <div className="order-2 lg:order-1 flex lg:flex-col gap-2 lg:gap-3 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-              {images.map((img, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setActiveImage(idx)}
-                  className={`flex-shrink-0 w-16 h-16 lg:w-20 lg:h-20 rounded-xl border-2 transition-all overflow-hidden bg-gray-50 hover:border-pink-300 ${
-                    activeImage === idx ? 'border-pink-600 ring-2 ring-pink-100' : 'border-gray-100'
-                  }`}
-                >
-                  <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-contain p-1.5" />
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="order-2 lg:order-1 flex lg:flex-col gap-3 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
+            {images.map((img, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveImage(idx)}
+                className={`flex-shrink-0 w-[80px] h-[80px] rounded-[10px] border-2 transition-all overflow-hidden bg-gray-50 hover:border-pink-300 ${
+                  activeImage === idx ? 'border-pink-600' : 'border-gray-200'
+                }`}
+              >
+                <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-contain p-1" />
+              </button>
+            ))}
+          </div>
 
           {/* Center Column: Main Image */}
           <div className="order-1 lg:order-2">
-            <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center justify-center" style={{ minHeight: '500px' }}>
+            <div className="flex items-center justify-center" style={{ minHeight: '620px' }}>
               <img
                 src={images[activeImage]}
                 alt={product.name}
-                className="object-contain max-h-[480px] max-w-full select-none"
+                className="object-contain max-h-[620px] w-full select-none"
                 draggable={false}
               />
             </div>
           </div>
 
           {/* Right Column: Product Info */}
-          <div className="order-3">
-            <div className="space-y-5">
-              {/* Product Title */}
-              <div>
-                <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 leading-snug mb-2">{product.name}</h1>
-              </div>
+          <div className="order-3 space-y-6">
+            {/* Product Title */}
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 leading-snug mb-2">{product.name}</h1>
+            </div>
 
-              {/* Product Meta Info */}
-              <div className="space-y-2 text-sm">
-                {(product.seriesName || product.collection) && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 font-medium w-16">Seriya:</span>
-                    <span className="text-gray-900 font-semibold">{product.seriesName || product.collection}</span>
-                  </div>
-                )}
+            {/* Product Meta Info */}
+            <div className="space-y-3 text-sm">
+              {(product.seriesName || product.collection) && (
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500 font-medium w-16">Artikul:</span>
-                  <span className="text-gray-900 font-mono">{product.sku}</span>
+                  <span className="text-gray-500 font-medium w-20">Seriya:</span>
+                  <span className="text-gray-900 font-semibold">{product.seriesName || product.collection}</span>
                 </div>
-                {product.weight?.value && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 font-medium w-16">Çəki:</span>
-                    <span className="text-gray-900">{product.weight.value} {product.weight.unit}</span>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500 font-medium w-20">Artikul:</span>
+                <span className="text-gray-900 font-mono">{product.sku}</span>
+              </div>
+              {product.weight?.value && (
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 font-medium w-20">Çəki:</span>
+                  <span className="text-gray-900">{product.weight.value} {product.weight.unit}</span>
+                </div>
+              )}
+              {product.volume?.value && (
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 font-medium w-20">Həcm:</span>
+                  <span className="text-gray-900">{product.volume.value} {product.volume.unit}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Short Description Preview */}
+            {product.description && (
+              <div className="text-sm text-gray-700 line-clamp-3">
+                {product.description.split('\n').filter(line => line.trim() !== '')[0]}
+              </div>
+            )}
+
+            {/* Price Card */}
+            <div className="bg-white rounded-2xl p-5 border border-gray-200">
+              {/* Price Display */}
+              <div className="mb-6">
+                <div className="flex items-baseline gap-3 mb-3">
+                  {discountPercent > 0 && (
+                    <span className="px-3 py-1 bg-pink-100 text-pink-600 text-sm font-bold rounded-lg">
+                      -%{discountPercent}
+                    </span>
+                  )}
+                  <div className="bg-pink-600 px-4 py-2 rounded-lg">
+                    <span className="text-3xl font-extrabold text-white">{formatPrice(product.price_sale)}</span>
                   </div>
-                )}
-                {product.volume?.value && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 font-medium w-16">Həcm:</span>
-                    <span className="text-gray-900">{product.volume.value} {product.volume.unit}</span>
+                </div>
+                {discountPercent > 0 && (
+                  <div className="text-xl text-gray-400 line-through font-medium">
+                    {formatPrice(product.price_catalog)}
                   </div>
                 )}
               </div>
 
-              {/* Price Card */}
-              <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100">
-                {/* Price Display */}
-                <div className="mb-5">
-                  <div className="flex items-baseline gap-3 mb-2">
-                    {discountPercent > 0 && (
-                      <span className="px-3 py-1 bg-red-50 text-red-600 text-sm font-bold rounded-lg">
-                        -%{discountPercent}
-                      </span>
-                    )}
-                    <span className="text-3xl font-extrabold text-pink-600">{formatPrice(product.price_sale)}</span>
-                    {discountPercent > 0 && (
-                      <span className="text-lg text-gray-400 line-through font-medium">{formatPrice(product.price_catalog)}</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Add to Cart & Favorite */}
-                <div className="flex gap-3">
-                  {product.status === 'out_of_stock' ? (
-                    <button 
-                      disabled
-                      className="flex-1 py-4 bg-gray-200 text-gray-500 font-bold rounded-xl cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm"
-                    >
-                      <ShoppingCart size={20} />
-                      Stokda yoxdur
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => handleAction('cart')}
-                      className="flex-1 py-4 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-700 transition-all flex items-center justify-center gap-2 shadow-sm"
-                    >
-                      <ShoppingCart size={20} />
-                      Səbətə Əlavə Et
-                    </button>
-                  )}
+              {/* Add to Cart & Favorite */}
+              <div className="flex gap-3">
+                {product.status === 'out_of_stock' ? (
                   <button 
-                    onClick={() => handleAction('favorite')}
-                    className={`w-14 h-14 rounded-xl flex items-center justify-center transition-all border ${
-                      isFavorite 
-                        ? 'bg-pink-600 border-pink-600 text-white' 
-                        : 'bg-white border-gray-200 text-gray-400 hover:border-pink-300 hover:text-pink-600'
-                    }`}
+                    disabled
+                    className="flex-1 py-4 bg-gray-200 text-gray-500 font-bold rounded-xl cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <Heart size={22} fill={isFavorite ? 'currentColor' : 'none'} />
+                    <ShoppingCart size={20} />
+                    Stokda yoxdur
                   </button>
-                </div>
+                ) : (
+                  <button 
+                    onClick={() => handleAction('cart')}
+                    className="flex-1 py-4 bg-[#0F52BA] text-white font-bold rounded-xl hover:bg-[#0A3D8A] transition-all flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <ShoppingCart size={20} />
+                    Səbətə
+                  </button>
+                )}
+                <button 
+                  onClick={() => handleAction('favorite')}
+                  className={`w-14 h-14 rounded-xl flex items-center justify-center transition-all border ${
+                    isFavorite 
+                      ? 'bg-pink-600 border-pink-600 text-white' 
+                      : 'bg-white border-gray-200 text-gray-400 hover:border-pink-300 hover:text-pink-600'
+                  }`}
+                >
+                  <Heart size={22} fill={isFavorite ? 'currentColor' : 'none'} />
+                </button>
               </div>
 
               {/* Product Trust Indicators */}
-              <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+              <div className="mt-6 flex flex-wrap gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
                   {product.status === 'active' ? (
                     <>

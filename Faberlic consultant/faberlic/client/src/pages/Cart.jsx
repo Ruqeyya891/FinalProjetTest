@@ -1,19 +1,50 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Heart } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Heart, CheckCircle, ExternalLink } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+
+const MIN_ORDER_AMOUNT = 32;
 
 const Cart = () => {
   const [cartItems, setCartItems] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState('whatsapp_confirmation');
+  const [user, setUser] = useState(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState(null);
+  const [activeCatalog, setActiveCatalog] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchCart();
     fetchFavorites();
+    fetchUser();
+    fetchActiveCatalog();
   }, []);
+
+  const fetchActiveCatalog = async () => {
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/api/catalog-cycles/active');
+      setActiveCatalog(response.data.activeCatalog);
+    } catch (error) {
+      console.error('Error fetching active catalog:', error);
+    }
+  };
+
+  const fetchUser = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/api/users/profile', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUser(response.data.user);
+    } catch (error) {
+      console.error('User fetch error:', error);
+    }
+  };
 
   const fetchCart = async () => {
     const token = localStorage.getItem('token');
@@ -105,12 +136,16 @@ const Cart = () => {
 
   const subtotal = cartItems.reduce((acc, item) => acc + (item.product.price_sale * item.quantity), 0);
   const total = subtotal;
+  const isBelowMinOrder = total < MIN_ORDER_AMOUNT;
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-12 h-12 border-4 border-pink-600 border-t-transparent rounded-full animate-spin"></div>
-    </div>
-  );
+  const generateWhatsAppLink = (order) => {
+    const orderNumber = order._id.slice(-6);
+    const customerName = `${user?.name || ''} ${user?.surname || ''}`.trim();
+    const phone = user?.phone || '';
+    const productsList = order.items.map(item => `${item.name} x ${item.quantity} - ${item.total} AZN`).join('%0A');
+    const message = `Sifariş #${orderNumber}%0A%0AAd: ${customerName}%0ATelefon: ${phone}%0A%0AMəhsullar:%0A${productsList}%0A%0ACəmi: ${order.totalAmount} AZN`;
+    return `https://wa.me/?text=${encodeURIComponent(message)}`;
+  };
 
   const handleCheckout = async () => {
     const token = localStorage.getItem('token');
@@ -122,20 +157,32 @@ const Cart = () => {
           price: item.product.price_sale
         })),
         totalAmount: total,
-        contactMethod: 'whatsapp'
+        contactMethod: 'whatsapp',
+        paymentMethod
       };
 
-      await axios.post('http://127.0.0.1:5000/api/orders', orderData, {
+      const response = await axios.post('http://127.0.0.1:5000/api/orders', orderData, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      toast.success('Sifarişiniz uğurla qəbul edildi!');
+      setCreatedOrder(response.data.order);
+      setShowSuccessModal(true);
       setCartItems([]);
-      navigate('/dashboard');
     } catch (error) {
-      toast.error('Sifariş zamanı xəta baş verdi');
+      toast.error(error.response?.data?.message || 'Sifariş zamanı xəta baş verdi');
     }
   };
+
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    navigate('/dashboard');
+  };
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-pink-600 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
 
   return (
     <div className="bg-gray-50 min-h-screen py-12">
@@ -198,9 +245,71 @@ const Cart = () => {
                     <span className="text-pink-600">{total.toFixed(2)} AZN</span>
                   </div>
                 </div>
+
+                {/* Minimum order warning */}
+                {isBelowMinOrder && (
+                  <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                    <p className="text-yellow-800 text-sm font-medium">
+                      Minimum sifariş məbləği 32 AZN-dir. Sifarişi tamamlamaq üçün səbətə əlavə məhsul əlavə edin.
+                    </p>
+                  </div>
+                )}
+
+                {/* Payment method selection */}
+                <div className="mb-6">
+                  <h4 className="font-bold text-gray-900 mb-3">Ödəniş metodu</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 p-4 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input 
+                        type="radio" 
+                        name="paymentMethod" 
+                        value="card_transfer" 
+                        checked={paymentMethod === 'card_transfer'} 
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="w-4 h-4 text-pink-600"
+                      />
+                      <span className="font-medium text-gray-900">Kart köçürməsi</span>
+                    </label>
+                    <label className="flex items-center gap-3 p-4 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input 
+                        type="radio" 
+                        name="paymentMethod" 
+                        value="whatsapp_confirmation" 
+                        checked={paymentMethod === 'whatsapp_confirmation'} 
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="w-4 h-4 text-pink-600"
+                      />
+                      <span className="font-medium text-gray-900">WhatsApp ilə ödəniş təsdiqi</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Catalog info */}
+                {activeCatalog ? (
+                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                    <p className="text-blue-800 text-sm font-medium">
+                      Kataloq {activeCatalog.catalogNumber} üzrə qiymətlər keçərlidir.
+                    </p>
+                    <p className="text-blue-800 text-sm font-medium mt-1">
+                      Ödəniş üçün son tarix: {new Date(activeCatalog.endDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <p className="text-red-800 text-sm font-medium">
+                      Aktiv kataloq tapılmadı. Qiymətlər müvəqqəti göstərilmir.
+                    </p>
+                  </div>
+                )}
+
                 <button 
                   onClick={handleCheckout}
-                  className="w-full py-4 bg-pink-600 text-white font-bold rounded-2xl hover:bg-pink-700 transition-all shadow-xl shadow-pink-100 flex items-center justify-center gap-3"
+                  disabled={isBelowMinOrder}
+                  className={`w-full py-4 font-bold rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 ${
+                    isBelowMinOrder 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                      : 'bg-pink-600 text-white hover:bg-pink-700 shadow-pink-100'
+                  }`}
                 >
                   Sifarişi rəsmiləşdir
                   <ArrowRight size={20} />
@@ -220,6 +329,36 @@ const Cart = () => {
           </div>
         )}
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && createdOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center">
+            <CheckCircle size={64} className="mx-auto text-green-500 mb-6" />
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">Sifarişiniz qəbul edildi!</h3>
+            <p className="text-gray-600 mb-6">Sifarişiniz qeydə alındı. Məhsullar ödəniş təsdiqləndikdən sonra hazırlanacaq.</p>
+            
+            {paymentMethod === 'whatsapp_confirmation' && (
+              <a 
+                href={generateWhatsAppLink(createdOrder)} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-full py-4 bg-green-600 text-white font-bold rounded-2xl hover:bg-green-700 transition-all shadow-lg flex items-center justify-center gap-2 mb-4"
+              >
+                WhatsApp-a mesaj göndər
+                <ExternalLink size={20} />
+              </a>
+            )}
+            
+            <button 
+              onClick={handleSuccessModalClose}
+              className="w-full py-4 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition-all"
+            >
+              Sifarişlərimə bax
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

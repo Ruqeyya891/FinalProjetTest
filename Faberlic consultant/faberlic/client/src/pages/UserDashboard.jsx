@@ -123,22 +123,42 @@ const UserDashboard = () => {
                         <div className="p-4 bg-pink-50 text-pink-600 rounded-2xl group-hover:bg-pink-600 group-hover:text-white transition-all">
                           <ShoppingBag size={24} />
                         </div>
-                        <span className={`px-4 py-1.5 rounded-full text-xs font-black tracking-wide ${
-                          order.status === 'delivered' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'
-                        }`}>
-                          {order.status === 'pending' ? 'Gözləmədə' : 
-                           order.status === 'processing' ? 'Hazırlanır' :
-                           order.status === 'shipped' ? 'Yolda' :
-                           order.status === 'delivered' ? 'Çatdırıldı' : 'Ləğv edildi'}
-                        </span>
+                        <div className="space-y-2 text-right">
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-black tracking-wide ${
+                            order.paymentStatus === 'paid' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'
+                          }`}>
+                            {order.paymentStatus === 'paid' ? 'Ödənilib' : 'Ödənilməyib'}
+                          </span>
+                          <span className={`block px-3 py-1 rounded-full text-xs font-black tracking-wide ${
+                            order.orderStatus === 'delivered' ? 'bg-green-100 text-green-600' :
+                            order.orderStatus === 'shipped' ? 'bg-indigo-100 text-indigo-600' :
+                            order.orderStatus === 'preparing' ? 'bg-purple-100 text-purple-600' :
+                            order.orderStatus === 'paid' ? 'bg-blue-100 text-blue-600' : 'bg-yellow-100 text-yellow-600'
+                          }`}>
+                            {order.orderStatus === 'pending_payment' ? 'Ödəniş gözləməsində' : 
+                             order.orderStatus === 'paid' ? 'Ödənilib' : 
+                             order.orderStatus === 'preparing' ? 'Hazırlanır' :
+                             order.orderStatus === 'shipped' ? 'Yolda' :
+                             order.orderStatus === 'delivered' ? 'Çatdırıldı' : 'Ləğv edildi'}
+                          </span>
+                        </div>
                       </div>
                       <p className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">#{order._id.slice(-6)}</p>
+                      {order.catalogNumber && (
+                        <p className="text-pink-600 text-sm font-bold mb-2">Kataloq: {order.catalogNumber}</p>
+                      )}
                       <h4 className="text-2xl font-black text-gray-900 mb-6">{order.totalAmount} AZN</h4>
                       <div className="space-y-3 pt-6 border-t border-pink-50">
                         <div className="flex items-center gap-2 text-sm text-gray-500 font-bold">
                           <Clock size={16} className="text-pink-600" />
                           {new Date(order.createdAt).toLocaleDateString()}
                         </div>
+                        {order.paymentDeadline && (
+                          <div className="flex items-center gap-2 text-sm text-gray-500 font-bold">
+                            <Clock size={16} className="text-blue-600" />
+                            Ödəniş son tarixi: {new Date(order.paymentDeadline).toLocaleDateString()}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )) : (

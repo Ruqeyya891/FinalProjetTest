@@ -18,8 +18,14 @@ const OrderSchema = new mongoose.Schema({
         price: { type: Number }
     }],
     totalAmount: { type: Number, required: true },
-    status: { type: String, enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'], default: 'pending' },
+    catalogId: { type: mongoose.Schema.Types.ObjectId, ref: 'CatalogCycle' },
+    catalogNumber: { type: String },
+    catalogStartDate: { type: Date },
+    catalogEndDate: { type: Date },
+    paymentDeadline: { type: Date },
+    orderStatus: { type: String, enum: ['pending_payment', 'paid', 'preparing', 'shipped', 'delivered', 'cancelled'], default: 'pending_payment' },
     paymentStatus: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
+    paymentMethod: { type: String, enum: ['card_transfer', 'whatsapp_confirmation'], required: true },
     contactMethod: { type: String, enum: ['whatsapp', 'instagram'], required: true },
     notes: { type: String }
 }, { timestamps: true });

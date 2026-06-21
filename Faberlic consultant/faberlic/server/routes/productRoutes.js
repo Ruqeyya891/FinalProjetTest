@@ -8,7 +8,8 @@ const {
     updateProduct,
     updateProductStatus,
     deleteProduct,
-    importProducts
+    importProducts,
+    scrapeAndExport
 } = require('../controllers/productController');
 const { protect, adminOnly } = require('../middleware/auth');
 const uploadCSV = require('../middleware/uploadCSV');
@@ -24,5 +25,6 @@ router.patch('/:id/status', protect, adminOnly, updateProductStatus);
 router.delete('/:id', protect, adminOnly, deleteProduct);
 router.post('/sync', protect, adminOnly, syncProducts);
 router.post('/import', protect, adminOnly, uploadCSV.single('csvFile'), importProducts);
+router.post('/scrape-and-export', protect, adminOnly, scrapeAndExport);
 
 module.exports = router;
