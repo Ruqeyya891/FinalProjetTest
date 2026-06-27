@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { Key, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import { useNotification } from '../contexts/NotificationContext';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ customerCode: '', accessKey: '' });
   const navigate = useNavigate();
+  const { showSuccess, showError } = useNotification();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,10 +33,10 @@ const Login = () => {
         
         // Trigger storage event for App.js to update isAdmin state
         window.dispatchEvent(new Event('storage'));
-        toast.success('Giriş uğurla tamamlandı!');
+        showSuccess('Giriş uğurla tamamlandı!');
       }
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Giriş zamanı xəta baş verdi');
+      showError(error.response?.data?.error || 'Giriş zamanı xəta baş verdi');
     }
   };
 

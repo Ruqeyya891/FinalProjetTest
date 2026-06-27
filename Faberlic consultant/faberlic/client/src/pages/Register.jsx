@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { User, Mail, Phone, Eye, EyeOff, ShieldCheck, Heart, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useNotification } from '../contexts/NotificationContext';
 
 const Register = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [accessKey, setAccessKey] = useState('');
   const [customerCode, setCustomerCode] = useState('');
   const navigate = useNavigate();
+  const { showSuccess: notifySuccess, showError } = useNotification();
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -23,10 +24,10 @@ const Register = () => {
         setCustomerCode(response.data.user.customerCode);
         setAccessKey(response.data.accessKey);
         setShowSuccess(true);
-        toast.success('Qeydiyyat uğurla tamamlandı!');
+        notifySuccess('Qeydiyyat uğurla tamamlandı!');
       }
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Qeydiyyat zamanı xəta baş verdi');
+      showError(error.response?.data?.error || 'Qeydiyyat zamanı xəta baş verdi');
     }
   };
 

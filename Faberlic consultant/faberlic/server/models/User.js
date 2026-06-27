@@ -57,6 +57,14 @@ const userSchema = new mongoose.Schema(
           type: mongoose.Schema.Types.ObjectId,
           ref: "Product",
         },
+        variantSku: {
+          type: String,
+          default: null,
+        },
+        variantName: {
+          type: String,
+          default: null,
+        },
         quantity: {
           type: Number,
           default: 1,

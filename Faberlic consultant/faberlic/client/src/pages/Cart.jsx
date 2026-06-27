@@ -1,8 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Heart, CheckCircle, ExternalLink } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import axios from 'axios';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  IconButton,
+  Typography,
+  DialogContentText
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { useNotification } from '../contexts/NotificationContext';
 
 const MIN_ORDER_AMOUNT = 32;
 
@@ -16,6 +29,7 @@ const Cart = () => {
   const [createdOrder, setCreatedOrder] = useState(null);
   const [activeCatalog, setActiveCatalog] = useState(null);
   const navigate = useNavigate();
+  const { showSuccess, showError, showInfo, showConfirm } = useNotification();
 
   useEffect(() => {
     fetchCart();
@@ -58,7 +72,7 @@ const Cart = () => {
       });
       setCartItems(response.data.cart);
     } catch (error) {
-      toast.error('Səbəti yükləyərkən xəta baş verdi');
+      showError('Səbəti yükləyərkən xəta baş verdi');
     } finally {
       setLoading(false);
     }
@@ -83,7 +97,7 @@ const Cart = () => {
   const toggleFavorite = async (productId) => {
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.info('Bu əməliyyat üçün daxil olmalısınız.');
+      showInfo('Bu əməliyyat üçün daxil olmalısınız.');
       navigate('/login');
       return;
     }
@@ -101,48 +115,65 @@ const Cart = () => {
       setFavorites(newFavorites);
       
       const isNowFavorite = newFavorites.includes(productId);
-      toast.success(isNowFavorite ? 'Məhsul seçilmişlərə əlavə edildi!' : 'Məhsul seçilmişlərdən silindi!');
+      showSuccess(isNowFavorite ? 'Məhsul seçilmişlərə əlavə edildi!' : 'Məhsul seçilmişlərdən silindi!');
     } catch (error) {
-      toast.error('Xəta baş verdi');
+      showError('Xəta baş verdi');
     }
   };
 
-  const updateQuantity = async (productId, newQuantity) => {
+  const updateQuantity = async (productId, newQuantity, variantSku = null) => {
     if (newQuantity < 1) return;
     const token = localStorage.getItem('token');
     try {
       const response = await axios.post('http://127.0.0.1:5000/api/users/cart/update', 
-        { productId, quantity: newQuantity },
+        { productId, quantity: newQuantity, variantSku },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       fetchCart();
     } catch (error) {
-      toast.error('Miqdar yenilənərkən xəta baş verdi');
+      showError('Miqdar yenilənərkən xəta baş verdi');
     }
   };
 
-  const removeItem = async (productId) => {
+  const removeItem = async (productId, variantSku = null) => {
+    const confirmed = await showConfirm();
+    if (!confirmed) return;
+    
     const token = localStorage.getItem('token');
     try {
-      await axios.delete(`http://127.0.0.1:5000/api/users/cart/${productId}`, {
+      const url = variantSku 
+        ? `http://127.0.0.1:5000/api/users/cart/${productId}?variantSku=${encodeURIComponent(variantSku)}`
+        : `http://127.0.0.1:5000/api/users/cart/${productId}`;
+      await axios.delete(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setCartItems(cartItems.filter(item => (item.product._id || item.product) !== productId));
-      toast.success('Məhsul səbətdən silindi');
+      fetchCart();
+      showSuccess('Məhsul səbətdən silindi');
     } catch (error) {
-      toast.error('Məhsul silinərkən xəta baş verdi');
+      showError('Məhsul silinərkən xəta baş verdi');
     }
   };
 
-  const subtotal = cartItems.reduce((acc, item) => acc + (item.product.price_sale * item.quantity), 0);
+  // Filter out invalid items with null product
+  const validCartItems = cartItems.filter(item => item.product || item.productId);
+
+  const subtotal = validCartItems.reduce((acc, item) => {
+    if (item.product && item.product.price_sale) {
+      return acc + (item.product.price_sale * item.quantity);
+    }
+    return acc;
+  }, 0);
   const total = subtotal;
   const isBelowMinOrder = total < MIN_ORDER_AMOUNT;
 
   const generateWhatsAppLink = (order) => {
-    const orderNumber = order._id.slice(-6);
+    if (!order) return '';
+    const orderNumber = order._id?.slice(-6) || '';
     const customerName = `${user?.name || ''} ${user?.surname || ''}`.trim();
     const phone = user?.phone || '';
-    const productsList = order.items.map(item => `${item.name} x ${item.quantity} - ${item.total} AZN`).join('%0A');
+    // Filter invalid items in order too for safety
+    const validItems = (order.items || []).filter(item => item.name);
+    const productsList = validItems.map(item => `${item.name} x ${item.quantity} - ${item.total} AZN`).join('%0A');
     const message = `Sifariş #${orderNumber}%0A%0AAd: ${customerName}%0ATelefon: ${phone}%0A%0AMəhsullar:%0A${productsList}%0A%0ACəmi: ${order.totalAmount} AZN`;
     return `https://wa.me/?text=${encodeURIComponent(message)}`;
   };
@@ -151,10 +182,10 @@ const Cart = () => {
     const token = localStorage.getItem('token');
     try {
       const orderData = {
-        products: cartItems.map(item => ({
-          product: item.product._id,
+        products: validCartItems.map(item => ({
+          product: item.product?._id || item.productId,
           quantity: item.quantity,
-          price: item.product.price_sale
+          price: item.product?.price_sale || 0
         })),
         totalAmount: total,
         contactMethod: 'whatsapp',
@@ -169,7 +200,7 @@ const Cart = () => {
       setShowSuccessModal(true);
       setCartItems([]);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Sifariş zamanı xəta baş verdi');
+      showError(error.response?.data?.message || 'Sifariş zamanı xəta baş verdi');
     }
   };
 
@@ -192,40 +223,80 @@ const Cart = () => {
           Səbətim
         </h2>
 
-        {cartItems.length > 0 ? (
+        {validCartItems.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
             <div className="lg:col-span-2 space-y-4">
-              {cartItems.map((item) => (
-                <div key={item.product._id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-6">
-                  <img src={item.product.image} alt={item.product.name} className="w-24 h-24 object-cover rounded-xl" />
-                  <div className="flex-grow">
-                    <h3 className="font-bold text-gray-900">{item.product.name}</h3>
-                    <p className="text-sm text-gray-500">{item.product.mainCategory}</p>
-                    <div className="mt-2 text-pink-600 font-bold">{item.product.price_sale} AZN</div>
-                  </div>
-                  <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-xl">
-                    <button onClick={() => updateQuantity(item.product._id, item.quantity - 1)} className="p-1 hover:text-pink-600 transition-colors">
-                      <Minus size={18} />
-                    </button>
-                    <span className="font-bold w-8 text-center">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.product._id, item.quantity + 1)} className="p-1 hover:text-pink-600 transition-colors">
-                      <Plus size={18} />
-                    </button>
-                  </div>
-                  <button 
-                    onClick={() => toggleFavorite(item.product._id)} 
-                    className="p-3 text-gray-400 hover:text-pink-600 transition-colors"
-                  >
-                    <Heart 
-                      size={20} 
-                      fill={favorites.includes(item.product._id) ? "currentColor" : "none"} 
+              {validCartItems.map((item) => {
+                // If product is null/undefined, show "Məhsul tapılmadı"
+                if (!item.product) {
+                  return (
+                    <div key={item._id || item.productId} className="bg-white p-6 rounded-2xl shadow-sm border border-red-100 flex items-center gap-6">
+                      <div className="w-24 h-24 bg-red-50 rounded-xl flex items-center justify-center">
+                        <Trash2 className="text-red-400" />
+                      </div>
+                      <div className="flex-grow">
+                        <h3 className="font-bold text-red-600">Məhsul tapılmadı</h3>
+                        <p className="text-sm text-gray-500">Bu məhsul artıq mövcud deyil</p>
+                      </div>
+                      <button 
+                        onClick={() => removeItem(item.productId, item.variantSku)} 
+                        className="p-3 text-red-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  );
+                }
+
+                // Otherwise render normal product item
+                const productId = item.product._id;
+                const productName = item.product.name || 'Məhsul';
+
+                return (
+                  <div key={productId} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-6">
+                    <img 
+                      src={
+                        item.product.variants?.[0]?.variantImage || 
+                        item.product.variants?.[0]?.image || 
+                        item.product.commonImages?.[0] || 
+                        item.product.images?.[0] || 
+                        item.product.image
+                      } 
+                      alt={productName} 
+                      className="w-24 h-24 object-contain bg-pink-50 rounded-xl" 
                     />
-                  </button>
-                  <button onClick={() => removeItem(item.product._id)} className="p-3 text-gray-400 hover:text-red-500 transition-colors">
-                    <Trash2 size={20} />
-                  </button>
-                </div>
-              ))}
+                    <div className="flex-grow">
+                      <h3 className="font-bold text-gray-900">{productName}</h3>
+                      <p className="text-sm text-gray-500">{item.product.mainCategory || ''}</p>
+                      <div className="mt-2 text-pink-600 font-bold">{item.product.price_sale} AZN</div>
+                    </div>
+                    <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-xl">
+                      <button onClick={() => updateQuantity(productId, item.quantity - 1, item.variantSku)} className="p-1 hover:text-pink-600 transition-colors">
+                        <Minus size={18} />
+                      </button>
+                      <span className="font-bold w-8 text-center">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(productId, item.quantity + 1, item.variantSku)} className="p-1 hover:text-pink-600 transition-colors">
+                        <Plus size={18} />
+                      </button>
+                    </div>
+                    <button 
+                      onClick={() => toggleFavorite(productId)} 
+                      className="p-3 text-gray-400 hover:text-pink-600 transition-colors"
+                    >
+                      <Heart 
+                        size={20} 
+                        fill={favorites.includes(productId) ? "currentColor" : "none"} 
+                      />
+                    </button>
+                    <button 
+                      onClick={() => removeItem(productId, item.variantSku)} 
+                      className="p-3 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="lg:col-span-1">
@@ -263,23 +334,12 @@ const Cart = () => {
                       <input 
                         type="radio" 
                         name="paymentMethod" 
-                        value="card_transfer" 
-                        checked={paymentMethod === 'card_transfer'} 
-                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        value="admin_confirmation" 
+                        checked={true} 
+                        disabled
                         className="w-4 h-4 text-pink-600"
                       />
-                      <span className="font-medium text-gray-900">Kart köçürməsi</span>
-                    </label>
-                    <label className="flex items-center gap-3 p-4 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
-                      <input 
-                        type="radio" 
-                        name="paymentMethod" 
-                        value="whatsapp_confirmation" 
-                        checked={paymentMethod === 'whatsapp_confirmation'} 
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="w-4 h-4 text-pink-600"
-                      />
-                      <span className="font-medium text-gray-900">WhatsApp ilə ödəniş təsdiqi</span>
+                      <span className="font-medium text-gray-900">Admin təsdiqi</span>
                     </label>
                   </div>
                 </div>
@@ -330,35 +390,45 @@ const Cart = () => {
         )}
       </div>
 
-      {/* Success Modal */}
-      {showSuccessModal && createdOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center">
-            <CheckCircle size={64} className="mx-auto text-green-500 mb-6" />
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">Sifarişiniz qəbul edildi!</h3>
-            <p className="text-gray-600 mb-6">Sifarişiniz qeydə alındı. Məhsullar ödəniş təsdiqləndikdən sonra hazırlanacaq.</p>
-            
-            {paymentMethod === 'whatsapp_confirmation' && (
-              <a 
-                href={generateWhatsAppLink(createdOrder)} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="w-full py-4 bg-green-600 text-white font-bold rounded-2xl hover:bg-green-700 transition-all shadow-lg flex items-center justify-center gap-2 mb-4"
-              >
-                WhatsApp-a mesaj göndər
-                <ExternalLink size={20} />
-              </a>
-            )}
-            
-            <button 
-              onClick={handleSuccessModalClose}
-              className="w-full py-4 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition-all"
+      {/* Material UI Success Modal */}
+      <Dialog
+        open={showSuccessModal && !!createdOrder}
+        onClose={handleSuccessModalClose}
+        aria-labelledby="success-dialog-title"
+        aria-describedby="success-dialog-description"
+      >
+        <DialogTitle id="success-dialog-title" sx={{ textAlign: 'center' }}>
+          Sifarişiniz qəbul edildi!
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center' }}>
+          <CheckCircleIcon sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
+          <DialogContentText id="success-dialog-description">
+            Sifarişiniz qeydə alındı. Məhsullar ödəniş təsdiqləndikdən sonra hazırlanacaq.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ flexDirection: 'column', gap: 1, p: 3 }}>
+          {paymentMethod === 'whatsapp_confirmation' && (
+            <Button 
+              href={generateWhatsAppLink(createdOrder)} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              variant="contained"
+              color="success"
+              fullWidth
+              startIcon={<ExternalLink size={20} />}
             >
-              Sifarişlərimə bax
-            </button>
-          </div>
-        </div>
-      )}
+              WhatsApp-a mesaj göndər
+            </Button>
+          )}
+          <Button 
+            onClick={handleSuccessModalClose} 
+            color="inherit"
+            fullWidth
+          >
+            Sifarişlərimə bax
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

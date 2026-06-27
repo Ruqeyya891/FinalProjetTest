@@ -56,16 +56,6 @@ const sendMessage = async (req, res) => {
       sender: userId, 
       text 
     }); 
-    
-    // Generate AI response
-    const aiText = await generateAIResponse(text); 
-    const aiMessage = await Message.create({ 
-      chatId: chat._id.toString(), 
-      user: userId, 
-      senderType: "ai", 
-      text: aiText, 
-      isRead: true 
-    }); 
 
     // Update chat last message date
     chat.lastMessageDate = new Date();
@@ -73,7 +63,6 @@ const sendMessage = async (req, res) => {
 
     res.status(201).json({ 
       userMessage: message, 
-      aiMessage,
       chatId: chat._id.toString()
     }); 
 

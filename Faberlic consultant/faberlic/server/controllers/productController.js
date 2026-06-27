@@ -4,6 +4,7 @@ const Series = require('../models/Series');
 const { parseFaberlicProducts, scrapeFaberlicCatalog, generateExcelFromProducts } = require('../utils/scraper');
 const { categories } = require('../utils/categories');
 const slugify = require('../utils/slugify');
+const { getOrCreateSeries } = require('./seriesController');
 const Papa = require('papaparse');
 const fs = require('fs');
 const path = require('path');
@@ -44,6 +45,7 @@ const getProducts = async (req, res) => {
           minPrice,
           maxPrice
         } = req.query;
+        console.log('🔍 GET /api/products request received, query params:', req.query);
         let query = {};
         let andConditions = [];
 
@@ -54,20 +56,25 @@ const getProducts = async (req, res) => {
 
         // Category filtering logic with backward compatibility
         if (category) {
-            // Match either in categories array OR in old single category fields
-            andConditions.push({
-                $or: [
-                    { 
-                        'categories.categorySlug': category,
-                        ...(subcategory && { 'categories.subCategorySlug': subcategory }),
-                        ...(childCategory && { 'categories.childCategorySlug': childCategory })
-                    },
-                    {
+            // Match either in categories array (single element matching all criteria) OR in old single category fields
+            const categoriesArrayCondition = {
+                categories: {
+                    $elemMatch: {
                         categorySlug: category,
                         ...(subcategory && { subCategorySlug: subcategory }),
                         ...(childCategory && { childCategorySlug: childCategory })
                     }
-                ]
+                }
+            };
+
+            const oldFieldsCondition = {
+                categorySlug: category,
+                ...(subcategory && { subCategorySlug: subcategory }),
+                ...(childCategory && { childCategorySlug: childCategory })
+            };
+
+            andConditions.push({
+                $or: [categoriesArrayCondition, oldFieldsCondition]
             });
         }
 
@@ -117,7 +124,12 @@ const getProducts = async (req, res) => {
             query = { $and: andConditions };
         }
 
+        console.log('📋 MongoDB Query:', JSON.stringify(query, null, 2));
         const products = await Product.find(query);
+        console.log('📦 Products found:', products.length);
+        if (products.length > 0) {
+            console.log('📄 First product:', products[0].toObject());
+        }
         const activeCatalog = await getActiveCatalog();
         
         // Add active catalog price to each product
@@ -138,8 +150,10 @@ const getProducts = async (req, res) => {
             return productObj;
         });
         
+        console.log('📤 Sending products response');
         res.status(200).json(productsWithActivePrice);
     } catch (err) {
+        console.error('❌ Error in getProducts:', err);
         res.status(500).json({ error: err.message });
     }
 };
@@ -202,31 +216,54 @@ const syncProducts = async (req, res) => {
 // @desc Create a new product (Admin)
 // @route POST /api/products
 const createProduct = async (req, res) => {
-    try {
-        const newProduct = new Product(req.body);
-        const savedProduct = await newProduct.save();
-        res.status(201).json(savedProduct);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+  try {
+    console.log('📥 Request body received:', req.body);
+    const productData = { ...req.body };
+    
+    // Handle series
+    if (productData.seriesName) {
+      const series = await getOrCreateSeries(productData.seriesName);
+      productData.seriesSlug = series.slug;
     }
+    
+    const newProduct = new Product(productData);
+    console.log('📦 New product to save:', newProduct.toObject());
+    const savedProduct = await newProduct.save();
+    console.log('✅ Product saved successfully:', savedProduct.toObject());
+    res.status(201).json(savedProduct);
+  } catch (err) {
+    console.error('❌ Error saving product:', err);
+    res.status(500).json({ error: err.message });
+  }
 };
 
 // @desc Update product (Admin)
 // @route PUT /api/products/:id
 const updateProduct = async (req, res) => {
-    try {
-        const updatedProduct = await Product.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true, runValidators: true }
-        );
-        if (!updatedProduct) {
-            return res.status(404).json({ message: 'Məhsul tapılmadı' });
-        }
-        res.status(200).json(updatedProduct);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+  try {
+    console.log('📥 Update request body:', req.body);
+    const productData = { ...req.body };
+    
+    // Handle series
+    if (productData.seriesName) {
+      const series = await getOrCreateSeries(productData.seriesName);
+      productData.seriesSlug = series.slug;
     }
+    
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
+      productData,
+      { new: true, runValidators: true }
+    );
+    if (!updatedProduct) {
+      return res.status(404).json({ message: 'Məhsul tapılmadı' });
+    }
+    console.log('✅ Product updated successfully:', updatedProduct.toObject());
+    res.status(200).json(updatedProduct);
+  } catch (err) {
+    console.error('❌ Error updating product:', err);
+    res.status(500).json({ error: err.message });
+  }
 };
 
 // @desc Import products from CSV (Admin)

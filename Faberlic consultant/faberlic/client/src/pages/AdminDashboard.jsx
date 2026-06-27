@@ -5,7 +5,6 @@ import {
   Package, 
   MessageSquare, 
   Settings, 
-  Download, 
   Plus, 
   Edit3, 
   CheckCircle2, 
@@ -19,6 +18,7 @@ import {
   X, 
   ChevronRight, 
   LayoutGrid, 
+  LayoutDashboard,
   Calendar, 
   FileText, 
   ShieldCheck, 
@@ -32,6 +32,18 @@ import {
   LogOut,
   BookOpen
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  IconButton,
+  DialogContentText
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { categories as categoryData, slugify } from '../utils/categories';
 import { 
   Chart as ChartJS, 
@@ -49,7 +61,7 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { useNotification } from '../contexts/NotificationContext';
 
 ChartJS.register(
   CategoryScale,
@@ -77,7 +89,14 @@ const numberInputStyles = `
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { showSuccess, showError, showInfo, showWarning, showConfirm } = useNotification();
   const [activeTab, setActiveTab] = useState('overview');
+  
+  // Category Navigation State
+  const [selectedMainCategory, setSelectedMainCategory] = useState(null);
+  const [selectedSubCategory, setSelectedSubCategory] = useState(null);
+  const [selectedChildCategory, setSelectedChildCategory] = useState(null);
+  const [prefilledCategory, setPrefilledCategory] = useState(null);
   const [activeChats, setActiveChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [adminMessage, setAdminMessage] = useState('');
@@ -101,10 +120,7 @@ const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState({ id: null, type: null });
-  const [isHideChatModalOpen, setIsHideChatModalOpen] = useState(false);
-  const [chatToHide, setChatToHide] = useState(null);
+  const [modalSource, setModalSource] = useState("products"); // "products" | "categories"
   
   // Catalog Cycles Management State
   const [catalogCycles, setCatalogCycles] = useState([]);
@@ -118,10 +134,88 @@ const AdminDashboard = () => {
     isActive: true
   });
 
-  // Faberlic Catalog Scraper State
-  const [catalogUrl, setCatalogUrl] = useState('');
-  const [scraping, setScraping] = useState(false);
-  const [scrapeResult, setScrapeResult] = useState(null);
+
+  
+  // Series State
+  const [series, setSeries] = useState([]);
+  
+  // Helper function to open product modal with prefilled category
+  const openProductModalWithCategory = (mainCat, subCat, childCat) => {
+    const prefill = {
+      categoryName: mainCat.name,
+      categorySlug: mainCat.slug,
+      subCategoryName: subCat ? subCat.name : '',
+      subCategorySlug: subCat ? subCat.slug : '',
+      childCategoryName: childCat ? childCat.name : '',
+      childCategorySlug: childCat ? childCat.slug : '',
+      categories: [
+        {
+          categoryName: mainCat.name,
+          categorySlug: mainCat.slug,
+          subCategoryName: subCat ? subCat.name : '',
+          subCategorySlug: subCat ? subCat.slug : '',
+          childCategoryName: childCat ? childCat.name : '',
+          childCategorySlug: childCat ? childCat.slug : ''
+        }
+      ]
+    };
+    setPrefilledCategory(prefill);
+    setEditingProduct(null);
+    setModalSource("categories");
+    setProductForm({
+      name: '',
+      description: '',
+      price_catalog: '',
+      price_anbar: '',
+      price_sale: '',
+      discountPercent: '',
+      ...prefill,
+      sku: '',
+      stock: '',
+      isActive: true,
+      status: 'active',
+      images: [''],
+      commonImages: [''],
+      isInStock: true,
+      isSuperPrice: false,
+      isNew: false,
+      isDiscount: false,
+      isPromotion: false,
+      isHit: false,
+      collection: '',
+      seriesName: '',
+      seriesSlug: '',
+      productType: '',
+      productEffect: '',
+      skinType: '',
+      hairType: '',
+      ingredients: '',
+      usage: '',
+      weightValue: '',
+      weightUnit: 'q',
+      volumeValue: '',
+      volumeUnit: 'ml',
+      variants: []
+    });
+    setShowAddVariantForm(false);
+    setEditingVariantIndex(null);
+    setTempVariant({
+      sku: '',
+      name: '',
+      image: '',
+      variantImage: '',
+      images: [''],
+      stock: '',
+      status: 'active',
+      description: '',
+      ingredients: '',
+      usage: '',
+      weight: { value: null, unit: 'q' },
+      volume: { value: null, unit: 'ml' }
+    });
+    setIsProductModalOpen(true);
+  };
+
   const [productForm, setProductForm] = useState({
     name: '',
     description: '',
@@ -141,6 +235,7 @@ const AdminDashboard = () => {
     isActive: true,
     status: 'active',
     images: [''],
+    commonImages: [''],
     isInStock: true,
     isSuperPrice: false,
     isNew: false,
@@ -159,7 +254,25 @@ const AdminDashboard = () => {
     weightValue: '',
     weightUnit: 'q',
     volumeValue: '',
-    volumeUnit: 'ml'
+    volumeUnit: 'ml',
+    variants: []
+  });
+  const [showAddVariantForm, setShowAddVariantForm] = useState(false);
+  const [editingVariantIndex, setEditingVariantIndex] = useState(null);
+  const [isTempAccordionOpen, setIsTempAccordionOpen] = useState(false);
+  const [tempVariant, setTempVariant] = useState({
+    sku: '',
+    name: '',
+    image: '',
+    variantImage: '',
+    images: [''],
+    stock: '',
+    status: 'active',
+    description: '',
+    ingredients: '',
+    usage: '',
+    weight: { value: null, unit: 'q' },
+    volume: { value: null, unit: 'ml' }
   });
   const [formErrors, setFormErrors] = useState({});
   const [csvFile, setCsvFile] = useState(null);
@@ -271,7 +384,10 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     if (activeTab === 'chats') fetchActiveChats();
-    if (activeTab === 'products') fetchProducts();
+    if (activeTab === 'products') {
+      fetchProducts();
+      fetchSeries();
+    }
     if (activeTab === 'catalogs') fetchCatalogs();
     if (activeTab === 'catalog-cycles') fetchCatalogCycles();
     if (activeTab === 'orders') fetchOrders();
@@ -309,11 +425,11 @@ const AdminDashboard = () => {
       await axios.post('http://127.0.0.1:5000/api/catalog-cycles', data, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('Kataloq dövrü yaradıldı!');
+      showSuccess('Kataloq dövrü yaradıldı!');
       fetchCatalogCycles();
       setIsCatalogCycleModalOpen(false);
     } catch (error) {
-      toast.error('Kataloq dövrü yaradılarkən xəta baş verdi');
+      showError('Kataloq dövrü yaradılarkən xəta baş verdi');
     }
   };
   
@@ -323,28 +439,14 @@ const AdminDashboard = () => {
       await axios.put(`http://127.0.0.1:5000/api/catalog-cycles/${id}`, data, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('Kataloq dövrü yeniləndi!');
+      showSuccess('Kataloq dövrü yeniləndi!');
       fetchCatalogCycles();
       setIsCatalogCycleModalOpen(false);
     } catch (error) {
-      toast.error('Kataloq dövrü yenilənərkən xəta baş verdi');
+      showError('Kataloq dövrü yenilənərkən xəta baş verdi');
     }
   };
   
-  const deleteCatalogCycle = async (id) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`http://127.0.0.1:5000/api/catalog-cycles/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      toast.success('Kataloq dövrü silindi!');
-      fetchCatalogCycles();
-      setIsDeleteModalOpen(false);
-    } catch (error) {
-      toast.error('Kataloq dövrü silinərkən xəta baş verdi');
-    }
-  };
-
   const fetchAnalytics = async () => {
     setAnalyticsLoading(true);
     setAnalyticsError(null);
@@ -427,9 +529,9 @@ const AdminDashboard = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchOrders();
-      toast.success('Sifariş statusu yeniləndi');
+      showSuccess('Sifariş statusu yeniləndi');
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Xəta baş verdi');
+      showError(error.response?.data?.error || 'Xəta baş verdi');
     }
   };
 
@@ -440,17 +542,26 @@ const AdminDashboard = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchOrders();
-      toast.success('Ödəniş təsdiqləndi');
+      showSuccess('Ödəniş təsdiqləndi');
     } catch (error) {
-      toast.error('Xəta baş verdi');
+      showError('Xəta baş verdi');
     }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    toast.success('Çıxış edildi');
+    showSuccess('Çıxış edildi');
     navigate('/login');
     window.dispatchEvent(new Event('storage'));
+  };
+
+  const fetchSeries = async () => {
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/api/series');
+      setSeries(response.data);
+    } catch (error) {
+      console.error('Error fetching series:', error);
+    }
   };
 
   const fetchProducts = async () => {
@@ -465,39 +576,7 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleScrape = async (e) => {
-    e.preventDefault();
-    if (!catalogUrl) {
-      toast.error('Zəhmət olmasa kataloq linkini daxil edin');
-      return;
-    }
 
-    setScraping(true);
-    setScrapeResult(null);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post('http://127.0.0.1:5000/api/products/scrape-and-export',
-        { catalogUrl },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      setScrapeResult(response.data);
-      toast.success(`Uğurlu! ${response.data.pageCount} səhifədən ${response.data.productCount} məhsul tapıldı`);
-      
-      // Auto-download the Excel file
-      if (response.data.downloadUrl) {
-        const link = document.createElement('a');
-        link.href = `http://127.0.0.1:5000${response.data.downloadUrl}`;
-        link.download = response.data.downloadUrl.split('/').pop();
-        link.click();
-      }
-    } catch (error) {
-      console.error("Error scraping:", error.response?.data || error.message);
-      toast.error(error.response?.data?.message || 'Scrape edərkən xəta baş verdi');
-    } finally {
-      setScraping(false);
-    }
-  };
 
   // State for temporary new category being added
   const [tempCategory, setTempCategory] = useState({
@@ -528,7 +607,7 @@ const AdminDashboard = () => {
   const saveTempCategory = () => {
     console.log('Save temp category:', tempCategory);
     if (!tempCategory.categoryName || !tempCategory.subCategoryName) {
-      toast.error('Əsas və Alt Kateqoriya mütləqdir!');
+      showError('Əsas və Alt Kateqoriya mütləqdir!');
       return;
     }
     setProductForm(prev => ({
@@ -555,12 +634,94 @@ const AdminDashboard = () => {
     }));
   };
 
+  const handleAddVariantClick = () => {
+    setTempVariant({
+      sku: '',
+      name: '',
+      image: '',
+      variantImage: '',
+      images: [''],
+      stock: '',
+      status: 'active',
+      description: '',
+      ingredients: '',
+      usage: '',
+      weight: { value: null, unit: 'q' },
+      volume: { value: null, unit: 'ml' }
+    });
+    setEditingVariantIndex(null);
+    setShowAddVariantForm(true);
+  };
+
+  const handleEditVariantClick = (index) => {
+    setTempVariant({ ...productForm.variants[index] });
+    setEditingVariantIndex(index);
+    setShowAddVariantForm(true);
+  };
+
+  const saveVariant = () => {
+    if (!tempVariant.sku || !tempVariant.name) {
+      showError('SKU və Variant Adı mütləqdir!');
+      return;
+    }
+    setProductForm(prev => {
+      let newVariants = [...(prev.variants || [])];
+      if (editingVariantIndex !== null) {
+        newVariants[editingVariantIndex] = tempVariant;
+      } else {
+        newVariants.push(tempVariant);
+      }
+      return { ...prev, variants: newVariants };
+    });
+    setShowAddVariantForm(false);
+    setEditingVariantIndex(null);
+    setTempVariant({
+      sku: '',
+      name: '',
+      image: '',
+      variantImage: '',
+      images: [''],
+      stock: '',
+      status: 'active',
+      description: '',
+      ingredients: '',
+      usage: '',
+      weight: { value: null, unit: 'q' },
+      volume: { value: null, unit: 'ml' }
+    });
+  };
+
+  const removeVariant = (index) => {
+    setProductForm(prev => ({
+      ...prev,
+      variants: (prev.variants || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateVariant = (index, field, value) => {
+    setProductForm(prev => ({
+      ...prev,
+      variants: (prev.variants || []).map((v, i) => 
+        i === index ? { ...v, [field]: value } : v
+      )
+    }));
+  };
+
+  const addVariantImage = (index) => {
+    setProductForm(prev => ({
+      ...prev,
+      variants: (prev.variants || []).map((v, i) => 
+        i === index ? { ...v, images: [...(v.images || []), ''] } : v
+      )
+    }));
+  };
+
   const handleImportCSV = async (e) => {
     e.preventDefault();
     console.log('🔍 Step 1: Selected file:', csvFile); // Debug log 1
     
     if (!csvFile) {
-      toast.error('Zəhmət olmasa bir CSV faylı seçin');
+      showError('Zəhmət olmasa bir CSV faylı seçin');
       return;
     }
 
@@ -581,13 +742,13 @@ const AdminDashboard = () => {
       
       console.log('🔍 Step 3: Import successful:', response.data); // Debug log 3
 
-      toast.success(`${response.data.imported} məhsul uğurla import edildi!`);
+      showSuccess(`${response.data.imported} məhsul uğurla import edildi!`);
       setCsvFile(null);
       fetchProducts();
     } catch (error) {
       console.error('❌ Import error:', error);
       console.error('❌ Error details:', error.response?.data);
-      toast.error(error.response?.data?.error || 'Import edərkən xəta baş verdi');
+      showError(error.response?.data?.error || 'Import edərkən xəta baş verdi');
     } finally {
       setImporting(false);
     }
@@ -618,8 +779,9 @@ const AdminDashboard = () => {
     }
 
     // Validate images
-    const validImages = productForm.images.filter(img => img.trim() !== '');
-    if (validImages.length === 0) {
+    const validCommonImages = (productForm.commonImages || []).filter(img => img.trim() !== '');
+    const validImages = (productForm.images || []).filter(img => img.trim() !== '');
+    if (validCommonImages.length === 0 && validImages.length === 0) {
       errors.images = 'Ən azı 1 şəkil mütləqdir';
     }
 
@@ -633,12 +795,13 @@ const AdminDashboard = () => {
       const token = localStorage.getItem('token');
       const config = { headers: { Authorization: `Bearer ${token}` } };
       
-      // Convert prices to numbers
+      // Convert prices and stock to numbers
       const productData = {
         ...productForm,
         price_sale: parseFloat(productForm.price_sale) || 0,
         price_catalog: productForm.price_catalog ? parseFloat(productForm.price_catalog) : 0,
         price_anbar: productForm.price_anbar ? parseFloat(productForm.price_anbar) : 0,
+        stock: productForm.stock !== '' ? parseInt(productForm.stock, 10) : 0, // Convert stock to integer
         weight: {
           value: productForm.weightValue !== '' ? parseFloat(productForm.weightValue) : null,
           unit: productForm.weightUnit
@@ -646,32 +809,53 @@ const AdminDashboard = () => {
         volume: {
           value: productForm.volumeValue !== '' ? parseFloat(productForm.volumeValue) : null,
           unit: productForm.volumeUnit
-        }
+        },
+        // Filter out empty strings from images and commonImages
+        images: (productForm.images || []).filter(img => img.trim() !== ''),
+        commonImages: (productForm.commonImages || []).filter(img => img.trim() !== '')
       };
       
+      console.log('🛒 Product Data to Send:', productData);
+      
+      let response;
       if (editingProduct) {
-        await axios.put(`http://127.0.0.1:5000/api/products/${editingProduct._id}`, productData, config);
+        response = await axios.put(`http://127.0.0.1:5000/api/products/${editingProduct._id}`, productData, config);
       } else {
-        await axios.post('http://127.0.0.1:5000/api/products', productData, config);
+        response = await axios.post('http://127.0.0.1:5000/api/products', productData, config);
       }
+      
+      console.log('✅ Server Response:', response.data);
       setIsProductModalOpen(false);
       setEditingProduct(null);
+      setPrefilledCategory(null);
       setProductForm({
         name: '', description: '', price_catalog: '', price_anbar: '', price_sale: '', discountPercent: '',
         categoryName: '', categorySlug: '', subCategoryName: '', subCategorySlug: '',
         childCategoryName: '', childCategorySlug: '', categories: [],
         sku: '', stock: '', isActive: true,
         status: 'active',
-        images: [''], isInStock: true, isSuperPrice: false, isNew: false, isDiscount: false,
+        images: [''], commonImages: [''], isInStock: true, isSuperPrice: false, isNew: false, isDiscount: false,
         isPromotion: false, isHit: false, collection: '', seriesName: '', seriesSlug: '', productType: '', productEffect: '',
         skinType: '', hairType: '', ingredients: '', usage: '',
-        weightValue: '', weightUnit: 'q', volumeValue: '', volumeUnit: 'ml'
+        weightValue: '', weightUnit: 'q', volumeValue: '', volumeUnit: 'ml',
+        variants: []
+      });
+      setShowAddVariantForm(false);
+      setEditingVariantIndex(null);
+      setTempVariant({
+        sku: '',
+        name: '',
+        image: '',
+        variantImage: '',
+        images: [''],
+        stock: '',
+        status: 'active'
       });
       fetchProducts();
-      toast.success('Məhsul yadda saxlanıldı');
+      showSuccess('Məhsul yadda saxlanıldı');
     } catch (error) {
       console.error('Error submitting product:', error.response?.data || error.message);
-      toast.error(error.response?.data?.error || 'Xəta baş verdi');
+      showError(error.response?.data?.error || 'Xəta baş verdi');
     }
   };
 
@@ -694,23 +878,26 @@ const AdminDashboard = () => {
         )
       );
       
-      toast.success('Status dəyişdirildi');
+      showSuccess('Status dəyişdirildi');
     } catch (error) {
       console.error("Error updating status:", error.response?.data || error.message);
-      toast.error(error.response?.data?.message || 'Status dəyişdirilə bilmədi');
+      showError(error.response?.data?.message || 'Status dəyişdirilə bilmədi');
     }
   };
 
   const deleteProduct = async (id) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`http://127.0.0.1:5000/api/products/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchProducts();
-      toast.success('Məhsul silindi');
-    } catch (error) {
-      toast.error('Xəta baş verdi');
+    const confirmed = await showConfirm();
+    if (confirmed) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.delete(`http://127.0.0.1:5000/api/products/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        fetchProducts();
+        showSuccess('Məhsul silindi');
+      } catch (error) {
+        showError('Xəta baş verdi');
+      }
     }
   };
 
@@ -731,49 +918,97 @@ const AdminDashboard = () => {
         name: '', image: '', link: '', isActive: true
       });
       fetchCatalogs();
-      toast.success('Kataloq yadda saxlanıldı');
+      showSuccess('Kataloq yadda saxlanıldı');
     } catch (error) {
-      toast.error('Xəta baş verdi');
+      showError('Xəta baş verdi');
     }
   };
 
   const deleteCatalog = async (id) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`http://127.0.0.1:5000/api/catalogs/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchCatalogs();
-      toast.success('Kataloq silindi');
-    } catch (error) {
-      toast.error('Xəta baş verdi');
+    const confirmed = await showConfirm();
+    if (confirmed) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.delete(`http://127.0.0.1:5000/api/catalogs/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        fetchCatalogs();
+        showSuccess('Kataloq silindi');
+      } catch (error) {
+        showError('Xəta baş verdi');
+      }
     }
+  };
+
+  const deleteCatalogCycle = async (id) => {
+    const confirmed = await showConfirm();
+    if (confirmed) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.delete(`http://127.0.0.1:5000/api/catalog-cycles/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        showSuccess('Kataloq dövrü silindi');
+        fetchCatalogCycles();
+      } catch (error) {
+        showError('Kataloq dövrü silinərkən xəta baş verdi');
+      }
+    }
+  };
+
+  const matchesCategoryPath = (product, selectedPath) => { 
+    if (!selectedPath) return false; 
+
+    const normalize = (value) => 
+      String(value || "") 
+        .toLowerCase() 
+        .trim() 
+        .replace(/ə/g, "e") 
+        .replace(/ı/g, "i") 
+        .replace(/ö/g, "o") 
+        .replace(/ü/g, "u") 
+        .replace(/ğ/g, "g") 
+        .replace(/ç/g, "c") 
+        .replace(/ş/g, "s") 
+        .replace(/\s+/g, "-");
+
+    const categorySlug = normalize(selectedPath.categorySlug); 
+    const subCategorySlug = normalize(selectedPath.subCategorySlug); 
+    const childCategorySlug = normalize(selectedPath.childCategorySlug);
+
+    const matchFromArray = Array.isArray(product.categories) && product.categories.some(cat => { 
+      const catCategory = normalize(cat.categorySlug || cat.categoryName);
+      const catSub = normalize(cat.subCategorySlug || cat.subCategoryName);
+      const catChild = normalize(cat.childCategorySlug || cat.childCategoryName);
+
+      return catCategory === categorySlug && 
+        (!subCategorySlug || catSub === subCategorySlug) && 
+        (!childCategorySlug || catChild === childCategorySlug); 
+    }); 
+
+    const matchFromOldFields = 
+      normalize(product.categorySlug || product.category) === categorySlug && 
+      (!subCategorySlug || normalize(product.subCategorySlug || product.subCategory) === subCategorySlug) && 
+      (!childCategorySlug || normalize(product.childCategorySlug || product.childCategory) === childCategorySlug); 
+
+    return matchFromArray || matchFromOldFields; 
   };
 
   const hideChat = async (chatId) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post('http://127.0.0.1:5000/api/messages/hide', { chatId }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchActiveChats();
-      setSelectedChat(null);
-      toast.success('Söhbət gizləndildi');
-    } catch (error) {
-      toast.error('Xəta baş verdi');
+    const confirmed = await showConfirm();
+    if (confirmed) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.post('http://127.0.0.1:5000/api/messages/hide', { chatId }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        fetchActiveChats();
+        setSelectedChat(null);
+        showSuccess('Söhbət gizləndildi');
+      } catch (error) {
+        showError('Xəta baş verdi');
+      }
     }
-  };
-
-  const confirmDelete = async () => {
-    if (itemToDelete.type === 'product') {
-      await deleteProduct(itemToDelete.id);
-    } else if (itemToDelete.type === 'catalog') {
-      await deleteCatalog(itemToDelete.id);
-    } else if (itemToDelete.type === 'catalog-cycle') {
-      await deleteCatalogCycle(itemToDelete.id);
-    }
-    setIsDeleteModalOpen(false);
-    setItemToDelete({ id: null, type: null });
   };
 
   const fetchActiveChats = async () => {
@@ -888,7 +1123,7 @@ const AdminDashboard = () => {
     { label: 'Ümumi Gəlir', value: `${statsData.totalRevenue} AZN`, icon: <DollarSign size={24} />, color: 'bg-green-50 text-green-600', trend: '+12%', trendColor: 'text-green-500' },
     { label: 'Ümumi Müştərilər', value: statsData.totalUsers, icon: <Users size={24} />, color: 'bg-pink-50 text-pink-600', trend: '+5%', trendColor: 'text-pink-500' },
     { label: 'Yeni Sifarişlər', value: statsData.newOrders, icon: <Package size={24} />, color: 'bg-purple-50 text-purple-600', trend: '-2%', trendColor: 'text-red-500' },
-    { label: 'AI Söhbətləri', value: statsData.aiChats, icon: <MessageSquare size={24} />, color: 'bg-pink-50 text-pink-600', trend: '+18%', trendColor: 'text-green-500' },
+    { label: 'Dəstək Mesajları', value: statsData.aiChats, icon: <MessageSquare size={24} />, color: 'bg-pink-50 text-pink-600', trend: '+18%', trendColor: 'text-green-500' },
   ];
 
   return (
@@ -922,12 +1157,13 @@ const AdminDashboard = () => {
           <nav className="flex-grow p-6 space-y-2">
             {[
               { id: 'overview', label: 'Ümumi Baxış', icon: <LayoutGrid size={20} /> },
+              { id: 'categories', label: 'Kateqoriyalar', icon: <LayoutDashboard size={20} /> },
               { id: 'products', label: 'Məhsullar', icon: <Package size={20} /> },
               { id: 'catalogs', label: 'Kataloqlar', icon: <BookOpen size={20} /> },
               { id: 'catalog-cycles', label: 'Kataloq Dövrləri', icon: <Calendar size={20} /> },
               { id: 'orders', label: 'Sifarişlər', icon: <Clock size={20} /> },
               { id: 'users', label: 'Müştərilər', icon: <Users size={20} /> },
-              { id: 'chats', label: 'AI Söhbətlər', icon: <MessageSquare size={20} /> },
+              { id: 'chats', label: 'Dəstək Mesajları', icon: <MessageSquare size={20} /> },
             ].map(item => (
               <button
                 key={item.id}
@@ -953,9 +1189,10 @@ const AdminDashboard = () => {
         </div>
         
         {/* Mobile Bottom Nav */}
-        <div className="lg:hidden grid grid-cols-7 p-2 bg-white">
+        <div className="lg:hidden grid grid-cols-8 p-2 bg-white">
           {[
             { id: 'overview', label: 'Baxış', icon: <LayoutGrid size={20} /> },
+            { id: 'categories', label: 'Kateqoriyalar', icon: <LayoutDashboard size={20} /> },
             { id: 'products', label: 'Məhsullar', icon: <Package size={20} /> },
             { id: 'catalogs', label: 'Kataloqlar', icon: <BookOpen size={20} /> },
             { id: 'catalog-cycles', label: 'Kataloq', icon: <Calendar size={20} /> },
@@ -980,12 +1217,7 @@ const AdminDashboard = () => {
       </aside>
 
       <main className="flex-grow p-4 md:p-8 lg:p-12 overflow-x-hidden">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="text-gray-500 mt-1">İdarəetmə və analiz paneli.</p>
-          </div>
-        </header>
+
 
         {activeTab === 'overview' && (
           <>
@@ -1036,37 +1268,483 @@ const AdminDashboard = () => {
           </>
         )}
 
+        {activeTab === 'categories' && (
+          <div className="space-y-8">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+              <div className="flex items-center gap-2 text-gray-500">
+                <button
+                  onClick={() => {
+                    setSelectedChildCategory(null);
+                    setSelectedSubCategory(null);
+                    setSelectedMainCategory(null);
+                  }}
+                  className="text-pink-600 hover:text-pink-700 font-semibold"
+                >
+                  Kateqoriyalar
+                </button>
+                {selectedMainCategory && (
+                  <>
+                    <ChevronRight size={16} />
+                    {selectedSubCategory ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedChildCategory(null);
+                            setSelectedSubCategory(null);
+                          }}
+                          className="text-pink-600 hover:text-pink-700 font-semibold"
+                        >
+                          {selectedMainCategory.name}
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-gray-900 font-semibold">{selectedMainCategory.name}</span>
+                    )}
+                  </>
+                )}
+                {selectedSubCategory && (
+                  <>
+                    <ChevronRight size={16} />
+                    {selectedChildCategory ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedChildCategory(null);
+                          }}
+                          className="text-pink-600 hover:text-pink-700 font-semibold"
+                        >
+                          {selectedSubCategory.name}
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-gray-900 font-semibold">{selectedSubCategory.name}</span>
+                    )}
+                  </>
+                )}
+                {selectedChildCategory && (
+                  <>
+                    <ChevronRight size={16} />
+                    <span className="text-gray-900 font-semibold">{selectedChildCategory.name}</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Main Categories */}
+            {!selectedMainCategory && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {categoryData.map((cat) => (
+                  <button
+                    key={cat.slug}
+                    onClick={() => {
+                      setSelectedMainCategory(cat);
+                      setSelectedSubCategory(null);
+                      setSelectedChildCategory(null);
+                    }}
+                    className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-200 transition-all text-left group"
+                  >
+                    <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-pink-600 transition-colors">{cat.name}</h3>
+                    <p className="text-sm text-gray-500">{cat.subCategories?.length || 0} Alt Kateqoriya</p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Sub Categories */}
+            {selectedMainCategory && !selectedSubCategory && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {selectedMainCategory.subCategories?.map((subCat) => (
+                  <button
+                    key={subCat.slug}
+                    onClick={() => {
+                      setSelectedSubCategory(subCat);
+                      setSelectedChildCategory(null);
+                    }}
+                    className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-200 transition-all text-left group"
+                  >
+                    <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-pink-600 transition-colors">{subCat.name}</h3>
+                    <p className="text-sm text-gray-500">{subCat.childCategories?.length || 0} Alt Kateqoriya</p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Child Categories OR Subcategory Page (if no children) */}
+            {selectedMainCategory && selectedSubCategory && !selectedChildCategory && (
+              <>
+                {selectedSubCategory.childCategories && selectedSubCategory.childCategories.length > 0 ? (
+                  // Show child categories grid
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {selectedSubCategory.childCategories?.map((childCat) => (
+                      <button
+                        key={childCat.slug}
+                        onClick={() => {
+                          setSelectedChildCategory(childCat);
+                        }}
+                        className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-200 transition-all text-left group"
+                      >
+                        <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-pink-600 transition-colors">{childCat.name}</h3>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  // Subcategory page (no children) with add button and product list
+                  <div className="space-y-8">
+                    <div className="bg-white p-12 rounded-3xl border border-gray-100 shadow-sm">
+                      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8">
+                        <h2 className="text-2xl font-bold text-gray-900">{selectedSubCategory.name}</h2>
+                        <button
+                          onClick={() => openProductModalWithCategory(selectedMainCategory, selectedSubCategory, null)}
+                          className="flex items-center justify-center gap-2 px-8 py-4 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-700 shadow-lg transition-all"
+                        >
+                          <Plus size={20} />
+                          Bu Kateqoriyaya Məhsul Əlavə Et
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Products Table for Subcategory */}
+                    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead className="bg-gray-50 border-b border-gray-100">
+                            <tr>
+                              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Şəkil</th>
+                              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Ad</th>
+                              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">SKU</th>
+                              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Qiymət</th>
+                              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Stok</th>
+                              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Redaktə Et</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {(() => {
+                              const selectedPath = {
+                                categorySlug: selectedMainCategory.slug,
+                                subCategorySlug: selectedSubCategory.slug,
+                                childCategorySlug: null
+                              };
+                              console.log("selectedCategoryPath:", selectedPath);
+                              console.log("products:", products);
+                              const categoryProducts = products.filter(product => matchesCategoryPath(product, selectedPath));
+                              console.log("categoryProducts:", categoryProducts);
+                              return categoryProducts.map(product => (
+                                <tr key={product._id} className="hover:bg-pink-50/30 transition-colors">
+                                  <td className="px-6 py-5">
+                                    <img 
+                                      src={product.images?.[0] || product.commonImages?.[0] || product.variants?.[0]?.image || product.variants?.[0]?.variantImage || product.image} 
+                                      alt={product.name} 
+                                      className="w-12 h-12 rounded-xl object-cover bg-gray-50 border border-gray-100"
+                                    />
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <p className="text-sm font-semibold text-gray-900 line-clamp-1">{product.name}</p>
+                                  </td>
+                                  <td className="px-6 py-5 text-sm text-gray-700">
+                                    {product.sku}
+                                  </td>
+                                  <td className="px-6 py-5 text-sm font-extrabold text-pink-600">
+                                    {product.price_sale} AZN
+                                  </td>
+                                  <td className="px-6 py-5 text-sm text-gray-700">
+                                    {product.stock}
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <select 
+                                      value={product.status || (product.isActive ? 'active' : 'passive')} 
+                                      onChange={(e) => updateProductStatus(product._id, e.target.value)}
+                                      className={`px-3 py-2 rounded-lg text-xs font-bold uppercase border-none outline-none cursor-pointer transition-colors ${
+                                        product.status === 'active' || (product.isActive && !product.status) ? 'bg-[#dcfce7] text-[#15803d]' : 
+                                        product.status === 'passive' ? 'bg-[#e5e7eb] text-[#374151]' : 
+                                        'bg-[#fee2e2] text-[#dc2626]'
+                                      }`}
+                                    >
+                                      <option value="active">Aktiv</option>
+                                      <option value="passive">Passiv</option>
+                                      <option value="out_of_stock">Stokda yoxdur</option>
+                                    </select>
+                                  </td>
+                                  <td className="px-6 py-5 text-right">
+                                    <button 
+                                      onClick={() => { 
+                                        setEditingProduct(product); 
+                                        setPrefilledCategory(null);
+                                        setModalSource("categories");
+                                        let initialCategories = [];
+                                        if (product.categories && product.categories.length > 0) {
+                                          initialCategories = product.categories;
+                                        } else if (product.categorySlug) {
+                                          initialCategories = [{
+                                            categoryName: product.categoryName || product.category || '',
+                                            categorySlug: product.categorySlug,
+                                            subCategoryName: product.subCategoryName || '',
+                                            subCategorySlug: product.subCategorySlug || '',
+                                            childCategoryName: product.childCategoryName || '',
+                                            childCategorySlug: product.childCategorySlug || ''
+                                          }];
+                                        }
+                                        setProductForm({
+                                          name: product.name || '',
+                                          description: product.description || '',
+                                          price_catalog: product.price_catalog || '',
+                                          price_anbar: product.price_anbar || '',
+                                          price_sale: product.price_sale || '',
+                                          discountPercent: product.discountPercent || '',
+                                          categoryName: product.categoryName || product.category || '',
+                                          categorySlug: product.categorySlug || '',
+                                          subCategoryName: product.subCategoryName || '',
+                                          subCategorySlug: product.subCategorySlug || '',
+                                          childCategoryName: product.childCategoryName || '',
+                                          childCategorySlug: product.childCategorySlug || '',
+                                          categories: initialCategories,
+                                          sku: product.sku || '',
+                                          stock: product.stock || '',
+                                          isActive: product.isActive !== false,
+                                          status: product.status || (product.isActive ? 'active' : 'passive'),
+                                          images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [''],
+                                          commonImages: Array.isArray(product.commonImages) && product.commonImages.length > 0 ? product.commonImages : [''],
+                                          isInStock: product.isInStock !== false,
+                                          isSuperPrice: product.isSuperPrice === true,
+                                          isNew: product.isNew === true,
+                                          isDiscount: product.isDiscount === true,
+                                          isPromotion: product.isPromotion === true,
+                                          isHit: product.isHit === true,
+                                          collection: product.collection || '',
+                                          seriesName: product.seriesName || '',
+                                          seriesSlug: product.seriesSlug || '',
+                                          productType: product.productType || '',
+                                          productEffect: product.productEffect || '',
+                                          skinType: product.skinType || '',
+                                          hairType: product.hairType || '',
+                                          ingredients: product.ingredients || '',
+                                          usage: product.usage || '',
+                                          weightValue: product.weight?.value || '',
+                                          weightUnit: product.weight?.unit || 'q',
+                                          volumeValue: product.volume?.value || '',
+                                          volumeUnit: product.volume?.unit || 'ml',
+                                          variants: product.variants || []
+                                        });
+                                        setShowAddVariantForm(false);
+                                        setEditingVariantIndex(null);
+                                        setTempVariant({
+                                          sku: '',
+                                          name: '',
+                                          image: '',
+                                          variantImage: '',
+                                          images: [''],
+                                          stock: '',
+                                          status: 'active',
+                                          description: '',
+                                          ingredients: '',
+                                          usage: '',
+                                          weight: { value: null, unit: 'q' },
+                                          volume: { value: null, unit: 'ml' }
+                                        }); 
+                                        setIsProductModalOpen(true); 
+                                      }} 
+                                      className="px-6 py-3 bg-pink-50 text-pink-600 font-bold rounded-xl hover:bg-pink-600 hover:text-white transition-all"
+                                    >
+                                      Redaktə Et
+                                    </button>
+                                  </td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Child Category Page with Add Button and Products */}
+            {selectedMainCategory && selectedSubCategory && selectedChildCategory && (
+              <div className="space-y-8">
+                <div className="bg-white p-12 rounded-3xl border border-gray-100 shadow-sm">
+                  <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8">
+                    <h2 className="text-2xl font-bold text-gray-900">{selectedChildCategory.name}</h2>
+                    <button
+                      onClick={() => openProductModalWithCategory(selectedMainCategory, selectedSubCategory, selectedChildCategory)}
+                      className="flex items-center justify-center gap-2 px-8 py-4 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-700 shadow-lg transition-all"
+                    >
+                      <Plus size={20} />
+                      Bu Kateqoriyaya Məhsul Əlavə Et
+                    </button>
+                  </div>
+                </div>
+
+                {/* Products Table for Child Category */}
+                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                          <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Şəkil</th>
+                          <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Ad</th>
+                          <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">SKU</th>
+                          <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Qiymət</th>
+                          <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Stok</th>
+                          <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Redaktə Et</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {(() => {
+                              const selectedPath = {
+                                categorySlug: selectedMainCategory.slug,
+                                subCategorySlug: selectedSubCategory.slug,
+                                childCategorySlug: selectedChildCategory.slug
+                              };
+                              console.log("selectedCategoryPath:", selectedPath);
+                              console.log("products:", products);
+                              const categoryProducts = products.filter(product => matchesCategoryPath(product, selectedPath));
+                              console.log("categoryProducts:", categoryProducts);
+                              return categoryProducts.map(product => (
+                                <tr key={product._id} className="hover:bg-pink-50/30 transition-colors">
+                                  <td className="px-6 py-5">
+                                    <img 
+                                      src={product.images?.[0] || product.commonImages?.[0] || product.variants?.[0]?.image || product.variants?.[0]?.variantImage || product.image} 
+                                      alt={product.name} 
+                                      className="w-12 h-12 rounded-xl object-cover bg-gray-50 border border-gray-100"
+                                    />
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <p className="text-sm font-semibold text-gray-900 line-clamp-1">{product.name}</p>
+                                  </td>
+                                  <td className="px-6 py-5 text-sm text-gray-700">
+                                    {product.sku}
+                                  </td>
+                                  <td className="px-6 py-5 text-sm font-extrabold text-pink-600">
+                                    {product.price_sale} AZN
+                                  </td>
+                                  <td className="px-6 py-5 text-sm text-gray-700">
+                                    {product.stock}
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <select 
+                                      value={product.status || (product.isActive ? 'active' : 'passive')} 
+                                      onChange={(e) => updateProductStatus(product._id, e.target.value)}
+                                      className={`px-3 py-2 rounded-lg text-xs font-bold uppercase border-none outline-none cursor-pointer transition-colors ${
+                                        product.status === 'active' || (product.isActive && !product.status) ? 'bg-[#dcfce7] text-[#15803d]' : 
+                                        product.status === 'passive' ? 'bg-[#e5e7eb] text-[#374151]' : 
+                                        'bg-[#fee2e2] text-[#dc2626]'
+                                      }`}
+                                    >
+                                      <option value="active">Aktiv</option>
+                                      <option value="passive">Passiv</option>
+                                      <option value="out_of_stock">Stokda yoxdur</option>
+                                    </select>
+                                  </td>
+                                  <td className="px-6 py-5 text-right">
+                                    <button 
+                                      onClick={() => { 
+                                        setEditingProduct(product); 
+                                        setPrefilledCategory(null);
+                                        setModalSource("categories");
+                                        let initialCategories = [];
+                                        if (product.categories && product.categories.length > 0) {
+                                          initialCategories = product.categories;
+                                        } else if (product.categorySlug) {
+                                          initialCategories = [{
+                                            categoryName: product.categoryName || product.category || '',
+                                            categorySlug: product.categorySlug,
+                                            subCategoryName: product.subCategoryName || '',
+                                            subCategorySlug: product.subCategorySlug || '',
+                                            childCategoryName: product.childCategoryName || '',
+                                            childCategorySlug: product.childCategorySlug || ''
+                                          }];
+                                        }
+                                        setProductForm({
+                                          name: product.name || '',
+                                          description: product.description || '',
+                                          price_catalog: product.price_catalog || '',
+                                          price_anbar: product.price_anbar || '',
+                                          price_sale: product.price_sale || '',
+                                          discountPercent: product.discountPercent || '',
+                                          categoryName: product.categoryName || product.category || '',
+                                          categorySlug: product.categorySlug || '',
+                                          subCategoryName: product.subCategoryName || '',
+                                          subCategorySlug: product.subCategorySlug || '',
+                                          childCategoryName: product.childCategoryName || '',
+                                          childCategorySlug: product.childCategorySlug || '',
+                                          categories: initialCategories,
+                                          sku: product.sku || '',
+                                          stock: product.stock || '',
+                                          isActive: product.isActive !== false,
+                                          status: product.status || (product.isActive ? 'active' : 'passive'),
+                                          images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [''],
+                                          commonImages: Array.isArray(product.commonImages) && product.commonImages.length > 0 ? product.commonImages : [''],
+                                          isInStock: product.isInStock !== false,
+                                          isSuperPrice: product.isSuperPrice === true,
+                                          isNew: product.isNew === true,
+                                          isDiscount: product.isDiscount === true,
+                                          isPromotion: product.isPromotion === true,
+                                          isHit: product.isHit === true,
+                                          collection: product.collection || '',
+                                          seriesName: product.seriesName || '',
+                                          seriesSlug: product.seriesSlug || '',
+                                          productType: product.productType || '',
+                                          productEffect: product.productEffect || '',
+                                          skinType: product.skinType || '',
+                                          hairType: product.hairType || '',
+                                          ingredients: product.ingredients || '',
+                                          usage: product.usage || '',
+                                          weightValue: product.weight?.value || '',
+                                          weightUnit: product.weight?.unit || 'q',
+                                          volumeValue: product.volume?.value || '',
+                                          volumeUnit: product.volume?.unit || 'ml',
+                                          variants: product.variants || []
+                                        });
+                                        setShowAddVariantForm(false);
+                                        setEditingVariantIndex(null);
+                                        setTempVariant({
+                                          sku: '',
+                                          name: '',
+                                          image: '',
+                                          variantImage: '',
+                                          images: [''],
+                                          stock: '',
+                                          status: 'active',
+                                          description: '',
+                                          ingredients: '',
+                                          usage: '',
+                                          weight: { value: null, unit: 'q' },
+                                          volume: { value: null, unit: 'ml' }
+                                        }); 
+                                        setIsProductModalOpen(true); 
+                                      }} 
+                                      className="px-6 py-3 bg-pink-50 text-pink-600 font-bold rounded-xl hover:bg-pink-600 hover:text-white transition-all"
+                                    >
+                                      Redaktə Et
+                                    </button>
+                                  </td>
+                                </tr>
+                              ));
+                            })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'products' && (
           <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
               <h2 className="text-2xl font-bold text-gray-900">Məhsul İdarəetməsi</h2>
               <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-                {/* Faberlic Catalog Scraper */}
-                <form onSubmit={handleScrape} className="flex flex-col md:flex-row items-center gap-2 flex-grow">
-                  <input
-                    type="text"
-                    placeholder="Faberlic kataloq linkini daxil edin..."
-                    value={catalogUrl}
-                    onChange={(e) => setCatalogUrl(e.target.value)}
-                    className="flex-grow px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500"
-                  />
-                  <button
-                    type="submit"
-                    disabled={scraping || !catalogUrl}
-                    className="flex items-center gap-2 px-6 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition-all"
-                  >
-                    {scraping ? (
-                      <span className="animate-spin mr-2">⏳</span>
-                    ) : (
-                      <Download size={18} />
-                    )}
-                    {scraping ? 'Scrape olunur...' : 'Kataloqu Scrape Et'}
-                  </button>
-                </form>
+
 
                 {/* New Product Button */}
                 <button onClick={() => { 
                   setEditingProduct(null); 
+                  setPrefilledCategory(null);
+                  setModalSource("products");
                   setProductForm({ 
                     name: '', 
                     description: '', 
@@ -1099,7 +1777,8 @@ const AdminDashboard = () => {
                     skinType: '', 
                     hairType: '',
                     ingredients: '',
-                    usage: ''
+                    usage: '',
+                    variants: []
                   }); 
                   setFormErrors({});
                   setIsProductModalOpen(true); 
@@ -1187,6 +1866,8 @@ const AdminDashboard = () => {
                             <button 
                               onClick={() => { 
                                 setEditingProduct(product); 
+                                setPrefilledCategory(null);
+                                setModalSource("products");
                                 // If product has categories array, use it, else create from single category
                                 let initialCategories = [];
                                 if (product.categories && product.categories.length > 0) {
@@ -1238,7 +1919,8 @@ const AdminDashboard = () => {
                                   weightValue: product.weight?.value || '',
                                   weightUnit: product.weight?.unit || 'q',
                                   volumeValue: product.volume?.value || '',
-                                  volumeUnit: product.volume?.unit || 'ml'
+                                  volumeUnit: product.volume?.unit || 'ml',
+                                  variants: product.variants || []
                                 }); 
                                 setIsProductModalOpen(true); 
                               }} 
@@ -1266,9 +1948,24 @@ const AdminDashboard = () => {
             {isProductModalOpen && (
               <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                 <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto p-12">
-                  <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-2xl font-bold">{editingProduct ? 'Redaktə Et' : 'Yeni Məhsul'}</h3>
-                    <button onClick={() => setIsProductModalOpen(false)}><X size={24} /></button>
+                  <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-8 gap-4">
+                    <div>
+                      <h3 className="text-2xl font-bold">{editingProduct ? 'Redaktə Et' : 'Yeni Məhsul'}</h3>
+                      {prefilledCategory && (
+                        <p className="text-sm text-gray-500 mt-2">
+                          Məhsul əlavə olunur: 
+                          <span className="font-semibold text-pink-600 ml-2">
+                            {prefilledCategory.categoryName}
+                            {prefilledCategory.subCategoryName && ` / ${prefilledCategory.subCategoryName}`}
+                            {prefilledCategory.childCategoryName && ` / ${prefilledCategory.childCategoryName}`}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                    <button onClick={() => {
+                      setIsProductModalOpen(false);
+                      setPrefilledCategory(null);
+                    }}><X size={24} /></button>
                   </div>
                   <form onSubmit={(e) => { e.preventDefault(); handleProductSubmit(); }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Form Errors */}
@@ -1291,167 +1988,187 @@ const AdminDashboard = () => {
                       <input placeholder="SKU" value={productForm.sku} onChange={e => setProductForm({...productForm, sku: e.target.value})} className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full ${formErrors.sku ? 'border border-red-500' : ''}`} />
                     </div>
 
-                    {/* Multiple Categories (Compact Version) */}
-                    <div className="md:col-span-2 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-semibold text-gray-700">Kateqoriyalar *</label>
-                        {!showAddCategoryMode && (
-                          <button 
-                            type="button" 
-                            onClick={addCategory}
-                            className="px-3 py-2 bg-pink-100 text-pink-700 rounded-lg text-sm font-bold hover:bg-pink-200 transition-all flex items-center gap-1"
-                          >
-                            <Plus size={16} />
-                            Kateqoriya əlavə et
-                          </button>
+                    {/* Multiple Categories (Compact Version) - Only show if not prefilled from category page */}
+                    {!prefilledCategory ? (
+                      <div className="md:col-span-2 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-semibold text-gray-700">Kateqoriyalar *</label>
+                          {!showAddCategoryMode && (
+                            <button 
+                              type="button" 
+                              onClick={addCategory}
+                              className="px-3 py-2 bg-pink-100 text-pink-700 rounded-lg text-sm font-bold hover:bg-pink-200 transition-all flex items-center gap-1"
+                            >
+                              <Plus size={16} />
+                              Kateqoriya əlavə et
+                            </button>
+                          )}
+                        </div>
+                        
+                        {formErrors.categories && (
+                          <p className="text-red-500 text-sm">{formErrors.categories}</p>
+                        )}
+
+                        {/* Category Chips */}
+                        <div className="flex flex-wrap gap-2">
+                          {(productForm.categories || []).map((cat, index) => (
+                            <div 
+                              key={index} 
+                              className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-full text-sm border border-gray-200"
+                            >
+                              <span className="text-gray-700">
+                                {cat.categoryName}
+                                {cat.subCategoryName && ` / ${cat.subCategoryName}`}
+                                {cat.childCategoryName && ` / ${cat.childCategoryName}`}
+                              </span>
+                              <button 
+                                type="button" 
+                                onClick={() => removeCategory(index)}
+                                className="w-5 h-5 rounded-full text-gray-500 hover:bg-gray-200 hover:text-red-600 flex items-center justify-center transition-all"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Add Category Mode */}
+                        {showAddCategoryMode && (
+                          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              {/* Main Category */}
+                              <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-700">Əsas Kateqoriya *</label>
+                                <select 
+                                  value={tempCategory.categoryName} 
+                                  onChange={(e) => {
+                                    const selectedCat = categoryData.find(c => c.name === e.target.value);
+                                    setTempCategory({
+                                      ...tempCategory,
+                                      categoryName: selectedCat ? selectedCat.name : '',
+                                      categorySlug: selectedCat ? selectedCat.slug : '',
+                                      subCategoryName: '',
+                                      subCategorySlug: '',
+                                      childCategoryName: '',
+                                      childCategorySlug: ''
+                                    });
+                                  }}
+                                  className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                                >
+                                  <option value="">Əsas Kateqoriya Seçin</option>
+                                  {Array.isArray(categoryData) && categoryData.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                </select>
+                              </div>
+
+                              {/* Sub Category */}
+                              <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-700">Alt Kateqoriya *</label>
+                                <select 
+                                  disabled={!tempCategory.categoryName}
+                                  value={tempCategory.subCategoryName} 
+                                  onChange={(e) => {
+                                    const selectedCat = categoryData.find(c => c.name === tempCategory.categoryName);
+                                    const selectedSub = selectedCat?.subCategories?.find(s => s.name === e.target.value);
+                                    setTempCategory({
+                                      ...tempCategory,
+                                      subCategoryName: selectedSub ? selectedSub.name : '',
+                                      subCategorySlug: selectedSub ? selectedSub.slug : '',
+                                      childCategoryName: '',
+                                      childCategorySlug: ''
+                                    });
+                                  }}
+                                  className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                                >
+                                  <option value="">Alt Kateqoriya Seçin</option>
+                                  {Array.isArray(categoryData.find(c => c.name === tempCategory.categoryName)?.subCategories) && 
+                                    categoryData.find(c => c.name === tempCategory.categoryName)?.subCategories?.map(sub => (
+                                      <option key={sub.name} value={sub.name}>{sub.name}</option>
+                                    ))}
+                                </select>
+                              </div>
+
+                              {/* Child Category */}
+                              {(() => {
+                                const selectedCategory = categoryData.find(c => c.name === tempCategory.categoryName);
+                                const selectedSubCategory = selectedCategory?.subCategories?.find(s => s.name === tempCategory.subCategoryName);
+                                const hasChildren = selectedSubCategory?.childCategories?.length > 0;
+                                
+                                if (!hasChildren) return null;
+                                
+                                return (
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-700">Child Kateqoriya</label>
+                                    <select 
+                                      value={tempCategory.childCategoryName} 
+                                      onChange={(e) => {
+                                        const selectedCat = categoryData.find(c => c.name === tempCategory.categoryName);
+                                        const selectedSub = selectedCat?.subCategories?.find(s => s.name === tempCategory.subCategoryName);
+                                        const selectedChild = selectedSub?.childCategories?.find(ch => ch.name === e.target.value);
+                                        setTempCategory({
+                                          ...tempCategory,
+                                          childCategoryName: selectedChild ? selectedChild.name : '',
+                                          childCategorySlug: selectedChild ? selectedChild.slug : ''
+                                        });
+                                      }}
+                                      className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                                    >
+                                      <option value="">Child Kateqoriya Seçin</option>
+                                      {Array.isArray(selectedSubCategory?.childCategories) && 
+                                        selectedSubCategory?.childCategories?.map(child => (
+                                          <option key={child.name} value={child.name}>{child.name}</option>
+                                        ))}
+                                    </select>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-2 justify-end">
+                              <button 
+                                type="button" 
+                                onClick={() => setShowAddCategoryMode(false)}
+                                className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-300 transition-all"
+                              >
+                                İmtina et
+                              </button>
+                              <button 
+                                type="button" 
+                                onClick={saveTempCategory}
+                                className="px-3 py-2 bg-pink-600 text-white rounded-lg text-sm font-bold hover:bg-pink-700 transition-all"
+                              >
+                                Kateqoriyanı əlavə et
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* If no categories and not adding, show a message */}
+                        {(productForm.categories || []).length === 0 && !showAddCategoryMode && (
+                          <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-xl">
+                            <p className="text-gray-500 text-sm">Kateqoriya əlavə etmək üçün yuxarıdakı düyməni basın</p>
+                          </div>
                         )}
                       </div>
-                      
-                      {formErrors.categories && (
-                        <p className="text-red-500 text-sm">{formErrors.categories}</p>
-                      )}
-
-                      {/* Category Chips */}
-                      <div className="flex flex-wrap gap-2">
-                        {(productForm.categories || []).map((cat, index) => (
-                          <div 
-                            key={index} 
-                            className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-full text-sm border border-gray-200"
-                          >
-                            <span className="text-gray-700">
-                              {cat.categoryName}
-                              {cat.subCategoryName && ` / ${cat.subCategoryName}`}
-                              {cat.childCategoryName && ` / ${cat.childCategoryName}`}
-                            </span>
-                            <button 
-                              type="button" 
-                              onClick={() => removeCategory(index)}
-                              className="w-5 h-5 rounded-full text-gray-500 hover:bg-gray-200 hover:text-red-600 flex items-center justify-center transition-all"
+                    ) : (
+                      // If prefilled, just show the category chip without add/remove options
+                      <div className="md:col-span-2 space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          {(productForm.categories || []).map((cat, index) => (
+                            <div 
+                              key={index} 
+                              className="flex items-center gap-2 bg-pink-100 text-pink-700 px-3 py-2 rounded-full text-sm border border-pink-200"
                             >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
+                              <span>
+                                {cat.categoryName}
+                                {cat.subCategoryName && ` / ${cat.subCategoryName}`}
+                                {cat.childCategoryName && ` / ${cat.childCategoryName}`}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-
-                      {/* Add Category Mode */}
-                      {showAddCategoryMode && (
-                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            {/* Main Category */}
-                            <div className="space-y-1">
-                              <label className="text-xs font-semibold text-gray-700">Əsas Kateqoriya *</label>
-                              <select 
-                                value={tempCategory.categoryName} 
-                                onChange={(e) => {
-                                  const selectedCat = categoryData.find(c => c.name === e.target.value);
-                                  setTempCategory({
-                                    ...tempCategory,
-                                    categoryName: selectedCat ? selectedCat.name : '',
-                                    categorySlug: selectedCat ? selectedCat.slug : '',
-                                    subCategoryName: '',
-                                    subCategorySlug: '',
-                                    childCategoryName: '',
-                                    childCategorySlug: ''
-                                  });
-                                }}
-                                className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
-                              >
-                                <option value="">Əsas Kateqoriya Seçin</option>
-                                {Array.isArray(categoryData) && categoryData.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                              </select>
-                            </div>
-
-                            {/* Sub Category */}
-                            <div className="space-y-1">
-                              <label className="text-xs font-semibold text-gray-700">Alt Kateqoriya *</label>
-                              <select 
-                                disabled={!tempCategory.categoryName}
-                                value={tempCategory.subCategoryName} 
-                                onChange={(e) => {
-                                  const selectedCat = categoryData.find(c => c.name === tempCategory.categoryName);
-                                  const selectedSub = selectedCat?.subCategories?.find(s => s.name === e.target.value);
-                                  setTempCategory({
-                                    ...tempCategory,
-                                    subCategoryName: selectedSub ? selectedSub.name : '',
-                                    subCategorySlug: selectedSub ? selectedSub.slug : '',
-                                    childCategoryName: '',
-                                    childCategorySlug: ''
-                                  });
-                                }}
-                                className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
-                              >
-                                <option value="">Alt Kateqoriya Seçin</option>
-                                {Array.isArray(categoryData.find(c => c.name === tempCategory.categoryName)?.subCategories) && 
-                                  categoryData.find(c => c.name === tempCategory.categoryName)?.subCategories?.map(sub => (
-                                    <option key={sub.name} value={sub.name}>{sub.name}</option>
-                                  ))}
-                              </select>
-                            </div>
-
-                            {/* Child Category */}
-                            {(() => {
-                              const selectedCategory = categoryData.find(c => c.name === tempCategory.categoryName);
-                              const selectedSubCategory = selectedCategory?.subCategories?.find(s => s.name === tempCategory.subCategoryName);
-                              const hasChildren = selectedSubCategory?.childCategories?.length > 0;
-                              
-                              if (!hasChildren) return null;
-                              
-                              return (
-                                <div className="space-y-1">
-                                  <label className="text-xs font-semibold text-gray-700">Child Kateqoriya</label>
-                                  <select 
-                                    value={tempCategory.childCategoryName} 
-                                    onChange={(e) => {
-                                      const selectedCat = categoryData.find(c => c.name === tempCategory.categoryName);
-                                      const selectedSub = selectedCat?.subCategories?.find(s => s.name === tempCategory.subCategoryName);
-                                      const selectedChild = selectedSub?.childCategories?.find(ch => ch.name === e.target.value);
-                                      setTempCategory({
-                                        ...tempCategory,
-                                        childCategoryName: selectedChild ? selectedChild.name : '',
-                                        childCategorySlug: selectedChild ? selectedChild.slug : ''
-                                      });
-                                    }}
-                                    className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
-                                  >
-                                    <option value="">Child Kateqoriya Seçin</option>
-                                    {Array.isArray(selectedSubCategory?.childCategories) && 
-                                      selectedSubCategory?.childCategories?.map(child => (
-                                        <option key={child.name} value={child.name}>{child.name}</option>
-                                      ))}
-                                  </select>
-                                </div>
-                              );
-                            })()}
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div className="flex gap-2 justify-end">
-                            <button 
-                              type="button" 
-                              onClick={() => setShowAddCategoryMode(false)}
-                              className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-300 transition-all"
-                            >
-                              İmtina et
-                            </button>
-                            <button 
-                              type="button" 
-                              onClick={saveTempCategory}
-                              className="px-3 py-2 bg-pink-600 text-white rounded-lg text-sm font-bold hover:bg-pink-700 transition-all"
-                            >
-                              Kateqoriyanı əlavə et
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* If no categories and not adding, show a message */}
-                      {(productForm.categories || []).length === 0 && !showAddCategoryMode && (
-                        <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-xl">
-                          <p className="text-gray-500 text-sm">Kateqoriya əlavə etmək üçün yuxarıdakı düyməni basın</p>
-                        </div>
-                      )}
-                    </div>
+                    )}
 
                     {/* Styles for number inputs */}
                     <style>{numberInputStyles}</style>
@@ -1698,19 +2415,20 @@ const AdminDashboard = () => {
 
                     {/* Collection, Product Type, Etc. */}
                     <input 
+                      list="seriesList"
                       placeholder="Seriya Adı" 
                       value={productForm.seriesName} 
                       onChange={e => setProductForm({
                         ...productForm, 
-                        seriesName: e.target.value,
-                        seriesSlug: slugify(e.target.value)
+                        seriesName: e.target.value
                       })} 
                       className="px-6 py-4 bg-gray-50 rounded-2xl outline-none" 
                     />
-                    <select value={productForm.collection} onChange={e => setProductForm({...productForm, collection: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none">
-                      <option value="">Kolleksiya Seçin</option>
-                      {collections.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    <datalist id="seriesList">
+                      {series.map(s => <option key={s._id} value={s.name} />)}
+                      {/* Also include the old collections for backward compatibility */}
+                      {collections.map(c => <option key={c} value={c} />)}
+                    </datalist>
                     <select value={productForm.productType} onChange={e => setProductForm({...productForm, productType: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none">
                       <option value="">Məhsul Növü Seçin</option>
                       {productTypes.map(p => <option key={p} value={p}>{p}</option>)}
@@ -1727,6 +2445,218 @@ const AdminDashboard = () => {
                       <option value="">Saçların Tipi Seçin</option>
                       {hairTypes.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
+
+                    {/* Variants Section */}
+                    <div className="md:col-span-2 space-y-4 pt-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold text-gray-700">Məhsul Variantları</label>
+                        <button 
+                          type="button" 
+                          onClick={handleAddVariantClick}
+                          className="flex items-center gap-2 px-4 py-2 bg-pink-100 text-pink-700 rounded-lg text-sm font-bold hover:bg-pink-200 transition-all"
+                        >
+                          <Plus size={16} /> Variant əlavə et
+                        </button>
+                      </div>
+
+                      {productForm.variants?.map((variant, index) => {
+                        const [isAccordionOpen, setIsAccordionOpen] = React.useState(false);
+                        return (
+                          <div key={index} className="bg-gray-50 p-6 rounded-2xl border border-gray-200 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold text-gray-700">Variant {index + 1}</span>
+                              <button 
+                                type="button"
+                                onClick={() => removeVariant(index)}
+                                className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-all"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-600">SKU *</label>
+                                <input 
+                                  placeholder="Variant SKU" 
+                                  value={variant.sku}
+                                  onChange={e => updateVariant(index, 'sku', e.target.value)}
+                                  className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-600">Variant Adı *</label>
+                                <input 
+                                  placeholder="Variant adı (rəng, ölçü və s.)" 
+                                  value={variant.name}
+                                  onChange={e => updateVariant(index, 'name', e.target.value)}
+                                  className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-600">Stok</label>
+                                <input 
+                                  type="number" 
+                                  placeholder="Stok sayı" 
+                                  value={variant.stock}
+                                  onChange={e => updateVariant(index, 'stock', e.target.value)}
+                                  className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-xs font-semibold text-gray-600">Status</label>
+                              <select 
+                                value={variant.status}
+                                onChange={e => updateVariant(index, 'status', e.target.value)}
+                                className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              >
+                                <option value="active">Aktiv</option>
+                                <option value="passive">Passiv</option>
+                                <option value="out_of_stock">Stokda yoxdur</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-gray-600">Əsas şəkil</label>
+                              <input 
+                                placeholder="Variantın əsas şəkil linki" 
+                                value={variant.image}
+                                onChange={e => updateVariant(index, 'image', e.target.value)}
+                                className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-semibold text-gray-600">Əlavə şəkillər</label>
+                                <button 
+                                  type="button"
+                                  onClick={() => addVariantImage(index)}
+                                  className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
+                                >
+                                  + Şəkil əlavə et
+                                </button>
+                              </div>
+                              {variant.images.map((img, imgIndex) => (
+                                <div key={imgIndex} className="flex gap-2">
+                                  <input 
+                                    placeholder="Şəkil linki" 
+                                    value={img}
+                                    onChange={e => updateVariantImage(index, imgIndex, e.target.value)}
+                                    className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                  />
+                                  <button 
+                                    type="button"
+                                    onClick={() => removeVariantImage(index, imgIndex)}
+                                    className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-all"
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Accordion for Advanced Variant Info */}
+                            <div className="border-t border-gray-200 pt-4">
+                              <button 
+                                type="button"
+                                onClick={() => setIsAccordionOpen(!isAccordionOpen)}
+                                className="flex items-center justify-between w-full text-left text-sm font-semibold text-gray-700 hover:text-pink-600"
+                              >
+                                <span>Ətraflı variant məlumatları</span>
+                                <ChevronRight size={18} className={`transition-transform ${isAccordionOpen ? 'rotate-90' : ''}`} />
+                              </button>
+
+                              {isAccordionOpen && (
+                                <div className="mt-4 space-y-4">
+                                  {/* Variant Description */}
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-600">Variant təsviri</label>
+                                    <textarea 
+                                      placeholder="Variant üçün xüsusi təsvir (boş buraxılırsa əsas məhsulun təsviri istifadə olunacaq)" 
+                                      value={variant.description || ''}
+                                      onChange={e => updateVariant(index, 'description', e.target.value)}
+                                      className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                      rows="3"
+                                    />
+                                  </div>
+
+                                  {/* Variant Ingredients */}
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-600">Variant tərkibi</label>
+                                    <textarea 
+                                      placeholder="Variant üçün xüsusi tərkib (boş buraxılırsa əsas məhsulun tərkibi istifadə olunacaq)" 
+                                      value={variant.ingredients || ''}
+                                      onChange={e => updateVariant(index, 'ingredients', e.target.value)}
+                                      className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                      rows="3"
+                                    />
+                                  </div>
+
+                                  {/* Variant Usage */}
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-600">Variant istifadə qaydası</label>
+                                    <textarea 
+                                      placeholder="Variant üçün xüsusi istifadə qaydası (boş buraxılırsa əsas məhsulun istifadə qaydası istifadə olunacaq)" 
+                                      value={variant.usage || ''}
+                                      onChange={e => updateVariant(index, 'usage', e.target.value)}
+                                      className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                      rows="3"
+                                    />
+                                  </div>
+
+                                  {/* Variant Weight */}
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-600">Variant çəkisi</label>
+                                    <div className="flex gap-2">
+                                      <input 
+                                        type="number" 
+                                        placeholder="Çəki dəyəri" 
+                                        value={variant.weight?.value || ''}
+                                        onChange={e => updateVariant(index, 'weight', { ...variant.weight, value: e.target.value ? parseFloat(e.target.value) : null })}
+                                        className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                      />
+                                      <select 
+                                        value={variant.weight?.unit || 'q'}
+                                        onChange={e => updateVariant(index, 'weight', { ...variant.weight, unit: e.target.value })}
+                                        className="px-4 py-3 bg-white rounded-xl outline-none border border-gray-200 min-w-[80px]"
+                                      >
+                                        <option value="q">q</option>
+                                        <option value="kq">kq</option>
+                                      </select>
+                                    </div>
+                                  </div>
+
+                                  {/* Variant Volume */}
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-600">Variant həcmi</label>
+                                    <div className="flex gap-2">
+                                      <input 
+                                        type="number" 
+                                        placeholder="Həcm dəyəri" 
+                                        value={variant.volume?.value || ''}
+                                        onChange={e => updateVariant(index, 'volume', { ...variant.volume, value: e.target.value ? parseFloat(e.target.value) : null })}
+                                        className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                      />
+                                      <select 
+                                        value={variant.volume?.unit || 'ml'}
+                                        onChange={e => updateVariant(index, 'volume', { ...variant.volume, unit: e.target.value })}
+                                        className="px-4 py-3 bg-white rounded-xl outline-none border border-gray-200 min-w-[80px]"
+                                      >
+                                        <option value="ml">ml</option>
+                                        <option value="l">l</option>
+                                      </select>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
 
                     <button type="submit" className="md:col-span-2 py-5 bg-pink-600 text-white font-bold rounded-2xl shadow-lg hover:bg-pink-700 transition-all">Yadda Saxla</button>
                   </form>
@@ -1761,7 +2691,7 @@ const AdminDashboard = () => {
                       <button onClick={() => { setEditingCatalog(catalog); setCatalogForm(catalog); setIsCatalogModalOpen(true); }} className="flex-1 py-2 bg-blue-50 text-blue-600 font-semibold rounded-xl hover:bg-blue-100 transition-all">
                         <Edit3 size={16} className="inline mr-1" /> Redaktə Et
                       </button>
-                      <button onClick={() => { setItemToDelete({ id: catalog._id, type: 'catalog' }); setIsDeleteModalOpen(true); }} className="flex-1 py-2 bg-red-50 text-red-600 font-semibold rounded-xl hover:bg-red-100 transition-all">
+                      <button onClick={() => deleteCatalog(catalog._id)} className="flex-1 py-2 bg-red-50 text-red-600 font-semibold rounded-xl hover:bg-red-100 transition-all">
                         <Trash2 size={16} className="inline mr-1" /> Sil
                       </button>
                     </div>
@@ -1835,10 +2765,7 @@ const AdminDashboard = () => {
                                 <Edit3 size={18} />
                               </button>
                               <button 
-                                onClick={() => { 
-                                  setItemToDelete({ id: cycle._id, type: 'catalog-cycle' }); 
-                                  setIsDeleteModalOpen(true); 
-                                }} 
+                                onClick={() => deleteCatalogCycle(cycle._id)} 
                                 className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
                               >
                                 <Trash2 size={18} />
@@ -2256,7 +3183,7 @@ const AdminDashboard = () => {
                         Detallar
                       </button>
                       <button 
-                        onClick={() => { setChatToHide(chat._id); setIsHideChatModalOpen(true); }} 
+                        onClick={() => hideChat(chat._id)} 
                         className="flex-1 py-2 bg-gray-100 text-gray-600 font-semibold rounded-xl text-xs hover:bg-gray-200 transition-all"
                       >
                         Gizlət
@@ -2277,7 +3204,7 @@ const AdminDashboard = () => {
                     <div className="flex gap-2">
                       {!selectedChat.adminIntervened && <button onClick={() => joinChat(selectedChat._id)} className="px-4 py-2 bg-white text-pink-600 rounded-xl font-bold text-sm">Söhbətə Qoşul</button>}
                       <button 
-                        onClick={() => { setChatToHide(selectedChat._id); setIsHideChatModalOpen(true); }} 
+                        onClick={() => hideChat(selectedChat._id)} 
                         className="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold text-sm"
                       >
                         Söhbəti Gizlət
@@ -2309,66 +3236,890 @@ const AdminDashboard = () => {
         )}
       </main>
 
-      {/* Delete Confirmation Modal */}
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
-            <div className="text-center">
-              <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Trash2 size={40} className="text-red-600" />
+      {/* Product Modal */}
+      {isProductModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto p-12">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-8 gap-4">
+              <div>
+                <h3 className="text-2xl font-bold">{editingProduct ? 'Redaktə Et' : 'Yeni Məhsul'}</h3>
+                {prefilledCategory && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    Məhsul əlavə olunur: 
+                    <span className="font-semibold text-pink-600 ml-2">
+                      {prefilledCategory.categoryName}
+                      {prefilledCategory.subCategoryName && ` / ${prefilledCategory.subCategoryName}`}
+                      {prefilledCategory.childCategoryName && ` / ${prefilledCategory.childCategoryName}`}
+                    </span>
+                  </p>
+                )}
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                {itemToDelete.type === 'product' ? 'Məhsulu' : 
-                 itemToDelete.type === 'catalog' ? 'Kataloqu' : 
-                 'Kataloq dövrünü'} silmək istəyirsiniz?
-              </h3>
-              <p className="text-gray-600 mb-8">Bu əməliyyat geri qaytarılmayacaq.</p>
-              
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setIsDeleteModalOpen(false)} 
-                  className="flex-1 py-4 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition-all"
-                >
-                  Ləğv et
-                </button>
-                <button 
-                  onClick={confirmDelete} 
-                  className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all shadow-lg"
-                >
-                  Sil
-                </button>
-              </div>
+              <button onClick={() => {
+                setIsProductModalOpen(false);
+                setPrefilledCategory(null);
+              }}><X size={24} /></button>
             </div>
-          </div>
-        </div>
-      )}
+            <form onSubmit={(e) => { e.preventDefault(); handleProductSubmit(); }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Form Errors */}
+              {Object.keys(formErrors).length > 0 && (
+                <div className="md:col-span-2 bg-red-50 border border-red-200 rounded-2xl p-4">
+                  <h4 className="text-red-800 font-bold mb-2">Xətalar var:</h4>
+                  <ul className="list-disc list-inside text-red-700 text-sm">
+                    {Object.values(formErrors).map((err, idx) => <li key={idx}>{err}</li>)}
+                  </ul>
+                </div>
+              )}
+              
+              {/* Basic Info */}
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Məhsul Adı *</label>
+                <input placeholder="Məhsul Adı" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full ${formErrors.name ? 'border border-red-500' : ''}`} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">SKU / Artikul *</label>
+                <input placeholder="SKU" value={productForm.sku} onChange={e => setProductForm({...productForm, sku: e.target.value})} className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full ${formErrors.sku ? 'border border-red-500' : ''}`} />
+              </div>
 
-      {/* Hide Chat Confirmation Modal */}
-      {isHideChatModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
-            <div className="text-center">
-              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Eye size={40} className="text-gray-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Söhbəti gizlətmək istəyirsiniz?</h3>
-              <p className="text-gray-600 mb-8">Bu söhbət admin panelindən gizlənəcək, lakin istifadəçi tərəfindən silinməyəcək.</p>
+              {/* Multiple Categories (Compact Version) - Only show if not prefilled from category page */}
+              {!prefilledCategory ? (
+                <div className="md:col-span-2 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-gray-700">Kateqoriyalar *</label>
+                    {!showAddCategoryMode && (
+                      <button 
+                        type="button" 
+                        onClick={addCategory}
+                        className="px-3 py-2 bg-pink-100 text-pink-700 rounded-lg text-sm font-bold hover:bg-pink-200 transition-all flex items-center gap-1"
+                      >
+                        <Plus size={16} />
+                        Kateqoriya əlavə et
+                      </button>
+                    )}
+                  </div>
+                  
+                  {formErrors.categories && (
+                    <p className="text-red-500 text-sm">{formErrors.categories}</p>
+                  )}
+
+                  {/* Category Chips */}
+                  <div className="flex flex-wrap gap-2">
+                    {(productForm.categories || []).map((cat, index) => (
+                      <div 
+                        key={index} 
+                        className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-full text-sm border border-gray-200"
+                      >
+                        <span className="text-gray-700">
+                          {cat.categoryName}
+                          {cat.subCategoryName && ` / ${cat.subCategoryName}`}
+                          {cat.childCategoryName && ` / ${cat.childCategoryName}`}
+                        </span>
+                        <button 
+                          type="button" 
+                          onClick={() => removeCategory(index)}
+                          className="w-5 h-5 rounded-full text-gray-500 hover:bg-gray-200 hover:text-red-600 flex items-center justify-center transition-all"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add Category Mode */}
+                  {showAddCategoryMode && (
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {/* Main Category */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-gray-700">Əsas Kateqoriya *</label>
+                          <select 
+                            value={tempCategory.categoryName} 
+                            onChange={(e) => {
+                              const selectedCat = categoryData.find(c => c.name === e.target.value);
+                              setTempCategory({
+                                ...tempCategory,
+                                categoryName: selectedCat ? selectedCat.name : '',
+                                categorySlug: selectedCat ? selectedCat.slug : '',
+                                subCategoryName: '',
+                                subCategorySlug: '',
+                                childCategoryName: '',
+                                childCategorySlug: ''
+                              });
+                            }}
+                            className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                          >
+                            <option value="">Əsas Kateqoriya Seçin</option>
+                            {Array.isArray(categoryData) && categoryData.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                          </select>
+                        </div>
+
+                        {/* Sub Category */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-gray-700">Alt Kateqoriya *</label>
+                          <select 
+                            disabled={!tempCategory.categoryName}
+                            value={tempCategory.subCategoryName} 
+                            onChange={(e) => {
+                              const selectedCat = categoryData.find(c => c.name === tempCategory.categoryName);
+                              const selectedSub = selectedCat?.subCategories?.find(s => s.name === e.target.value);
+                              setTempCategory({
+                                ...tempCategory,
+                                subCategoryName: selectedSub ? selectedSub.name : '',
+                                subCategorySlug: selectedSub ? selectedSub.slug : '',
+                                childCategoryName: '',
+                                childCategorySlug: ''
+                              });
+                            }}
+                            className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                          >
+                            <option value="">Alt Kateqoriya Seçin</option>
+                            {Array.isArray(categoryData.find(c => c.name === tempCategory.categoryName)?.subCategories) && 
+                              categoryData.find(c => c.name === tempCategory.categoryName)?.subCategories?.map(sub => (
+                                <option key={sub.name} value={sub.name}>{sub.name}</option>
+                              ))}
+                          </select>
+                        </div>
+
+                        {/* Child Category */}
+                        {(() => {
+                          const selectedCategory = categoryData.find(c => c.name === tempCategory.categoryName);
+                          const selectedSubCategory = selectedCategory?.subCategories?.find(s => s.name === tempCategory.subCategoryName);
+                          const hasChildren = selectedSubCategory?.childCategories?.length > 0;
+                          
+                          if (!hasChildren) return null;
+                          
+                          return (
+                            <div className="space-y-1">
+                              <label className="text-xs font-semibold text-gray-700">Child Kateqoriya</label>
+                              <select 
+                                value={tempCategory.childCategoryName} 
+                                onChange={(e) => {
+                                  const selectedCat = categoryData.find(c => c.name === tempCategory.categoryName);
+                                  const selectedSub = selectedCat?.subCategories?.find(s => s.name === tempCategory.subCategoryName);
+                                  const selectedChild = selectedSub?.childCategories?.find(ch => ch.name === e.target.value);
+                                  setTempCategory({
+                                    ...tempCategory,
+                                    childCategoryName: selectedChild ? selectedChild.name : '',
+                                    childCategorySlug: selectedChild ? selectedChild.slug : ''
+                                  });
+                                }}
+                                className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                              >
+                                <option value="">Child Kateqoriya Seçin</option>
+                                {Array.isArray(selectedSubCategory?.childCategories) && 
+                                  selectedSubCategory?.childCategories?.map(child => (
+                                    <option key={child.name} value={child.name}>{child.name}</option>
+                                  ))}
+                              </select>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 justify-end">
+                        <button 
+                          type="button" 
+                          onClick={() => setShowAddCategoryMode(false)}
+                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-300 transition-all"
+                        >
+                          İmtina et
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={saveTempCategory}
+                          className="px-3 py-2 bg-pink-600 text-white rounded-lg text-sm font-bold hover:bg-pink-700 transition-all"
+                        >
+                          Kateqoriyanı əlavə et
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* If no categories and not adding, show a message */}
+                  {(productForm.categories || []).length === 0 && !showAddCategoryMode && (
+                    <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-xl">
+                      <p className="text-gray-500 text-sm">Kateqoriya əlavə etmək üçün yuxarıdakı düyməni basın</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // If prefilled, just show the category chip without add/remove options
+                <div className="md:col-span-2 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {(productForm.categories || []).map((cat, index) => (
+                      <div 
+                        key={index} 
+                        className="flex items-center gap-2 bg-pink-100 text-pink-700 px-3 py-2 rounded-full text-sm border border-pink-200"
+                      >
+                        <span>
+                          {cat.categoryName}
+                          {cat.subCategoryName && ` / ${cat.subCategoryName}`}
+                          {cat.childCategoryName && ` / ${cat.childCategoryName}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Styles for number inputs */}
+              <style>{numberInputStyles}</style>
               
-              <div className="flex gap-4">
+              {/* Prices */}
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Köhnə qiymət / Kataloq qiyməti</label>
+                <input 
+                  type="number" 
+                  min="0" 
+                  step="0.01" 
+                  inputMode="decimal" 
+                  placeholder="Kataloq Qiyməti" 
+                  value={productForm.price_catalog} 
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (val < 0) val = 0;
+                    const newForm = {...productForm, price_catalog: val};
+                    // Auto calculate sale price if discount exists
+                    if (newForm.price_catalog && newForm.discountPercent) {
+                      const oldPrice = parseFloat(newForm.price_catalog);
+                      const discount = parseFloat(newForm.discountPercent);
+                      newForm.price_sale = (oldPrice - (oldPrice * discount / 100)).toFixed(2);
+                    }
+                    setProductForm(newForm);
+                  }} 
+                  className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full ${formErrors.price_catalog ? 'border border-red-500' : ''}`} 
+                />
+                {formErrors.price_catalog && <p className="text-red-500 text-xs mt-1">{formErrors.price_catalog}</p>}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Endirim faizi %</label>
+                <input 
+                  type="number" 
+                  min="0" 
+                  max="100" 
+                  step="0.01" 
+                  inputMode="decimal" 
+                  placeholder="Endirim faizi" 
+                  value={productForm.discountPercent} 
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (val < 0) val = 0;
+                    if (val > 100) val = 100;
+                    const newForm = {...productForm, discountPercent: val};
+                    // Auto calculate sale price
+                    if (newForm.price_catalog) {
+                      const oldPrice = parseFloat(newForm.price_catalog);
+                      const discount = parseFloat(newForm.discountPercent || 0);
+                      newForm.price_sale = (oldPrice - (oldPrice * discount / 100)).toFixed(2);
+                    }
+                    setProductForm(newForm);
+                  }} 
+                  className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Satış Qiyməti *</label>
+                <input 
+                  type="number" 
+                  min="0" 
+                  step="0.01" 
+                  inputMode="decimal" 
+                  placeholder="Satış Qiyməti" 
+                  value={productForm.price_sale} 
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (val < 0) val = 0;
+                    setProductForm({...productForm, price_sale: val});
+                  }} 
+                  className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full ${formErrors.price_sale ? 'border border-red-500' : ''}`} 
+                />
+                {formErrors.price_sale && <p className="text-red-500 text-xs mt-1">{formErrors.price_sale}</p>}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Anbar Qiyməti</label>
+                <input 
+                  type="number" 
+                  min="0" 
+                  step="0.01" 
+                  inputMode="decimal" 
+                  placeholder="Anbar Qiyməti" 
+                  value={productForm.price_anbar} 
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (val < 0) val = 0;
+                    setProductForm({...productForm, price_anbar: val});
+                  }} 
+                  className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full ${formErrors.price_anbar ? 'border border-red-500' : ''}`} 
+                />
+                {formErrors.price_anbar && <p className="text-red-500 text-xs mt-1">{formErrors.price_anbar}</p>}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Stok Sayı</label>
+                <input type="number" min="0" placeholder="Stok" value={productForm.stock} onChange={e => setProductForm({...productForm, stock: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" />
+              </div>
+
+              {/* Weight and Volume */}
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Çəki</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="number" 
+                    min="0" 
+                    step="0.01" 
+                    placeholder="Məs: 100" 
+                    value={productForm.weightValue} 
+                    onChange={e => setProductForm({...productForm, weightValue: e.target.value})} 
+                    className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" 
+                  />
+                  <select 
+                    value={productForm.weightUnit} 
+                    onChange={e => setProductForm({...productForm, weightUnit: e.target.value})} 
+                    className="px-4 py-4 bg-gray-50 rounded-2xl outline-none min-w-[80px]"
+                  >
+                    <option value="q">q</option>
+                    <option value="kq">kq</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Həcm</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="number" 
+                    min="0" 
+                    step="0.01" 
+                    placeholder="Məs: 250" 
+                    value={productForm.volumeValue} 
+                    onChange={e => setProductForm({...productForm, volumeValue: e.target.value})} 
+                    className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" 
+                  />
+                  <select 
+                    value={productForm.volumeUnit} 
+                    onChange={e => setProductForm({...productForm, volumeUnit: e.target.value})} 
+                    className="px-4 py-4 bg-gray-50 rounded-2xl outline-none min-w-[80px]"
+                  >
+                    <option value="ml">ml</option>
+                    <option value="l">l</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Textareas - Description, Ingredients, Usage */}
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Məhsul Haqqında / Ətraflı Təsvir</label>
+                <textarea placeholder="Məhsul haqqında ətraflı təsvir" value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" rows="3" />
+              </div>
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-sm font-semibold text-gray-700">Tərkibi</label>
+                <textarea placeholder="Məhsulun tərkibi" value={productForm.ingredients} onChange={e => setProductForm({...productForm, ingredients: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" rows="3" />
+              </div>
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-sm font-semibold text-gray-700">İstifadə Qaydası</label>
+                <textarea placeholder="Məhsulun istifadə qaydası" value={productForm.usage} onChange={e => setProductForm({...productForm, usage: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" rows="3" />
+              </div>
+
+              {/* Common Images URL */}
+              <div className="md:col-span-2 space-y-4">
+                <label className="text-sm font-semibold text-gray-700">Ümumi Məhsul Şəkilləri (URL) *</label>
+                <div className="grid grid-cols-1 gap-4">
+                  {productForm.commonImages?.map((img, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input 
+                        placeholder={`Ümumi şəkil ${index + 1} URL`} 
+                        value={img} 
+                        onChange={e => {
+                          const newCommonImages = [...productForm.commonImages];
+                          newCommonImages[index] = e.target.value;
+                          setProductForm({...productForm, commonImages: newCommonImages});
+                        }} 
+                        className={`px-6 py-4 bg-gray-50 rounded-2xl outline-none flex-grow ${formErrors.images ? 'border border-red-500' : ''}`} 
+                      />
+                      {productForm.commonImages.length > 1 && (
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const newCommonImages = productForm.commonImages.filter((_, i) => i !== index);
+                            setProductForm({...productForm, commonImages: newCommonImages});
+                          }}
+                          className="px-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition-all"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 <button 
-                  onClick={() => { setIsHideChatModalOpen(false); setChatToHide(null); }} 
-                  className="flex-1 py-4 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition-all"
+                  type="button"
+                  onClick={() => setProductForm({...productForm, commonImages: [...productForm.commonImages, '']})}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-all"
                 >
-                  Ləğv et
+                  <Plus size={20} /> + Daha çox ümumi şəkil əlavə et
                 </button>
+                {formErrors.images && <p className="text-red-500 text-xs mt-1">{formErrors.images}</p>}
+              </div>
+
+              {/* Backward compatibility: Old images section (for existing products without commonImages) */}
+              <div className="md:col-span-2 space-y-4">
+                <label className="text-sm font-semibold text-gray-500">Köhnə Şəkillər (geriyə uyğunluq üçün)</label>
+                <div className="grid grid-cols-1 gap-4">
+                  {productForm.images?.map((img, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input 
+                        placeholder={`Köhnə şəkil ${index + 1} URL`} 
+                        value={img} 
+                        onChange={e => {
+                          const newImages = [...productForm.images];
+                          newImages[index] = e.target.value;
+                          setProductForm({...productForm, images: newImages});
+                        }} 
+                        className="px-6 py-4 bg-gray-100 rounded-2xl outline-none flex-grow" 
+                      />
+                      {productForm.images.length > 1 && (
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const newImages = productForm.images.filter((_, i) => i !== index);
+                            setProductForm({...productForm, images: newImages});
+                          }}
+                          className="px-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition-all"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 <button 
-                  onClick={() => { hideChat(chatToHide); setIsHideChatModalOpen(false); setChatToHide(null); }} 
-                  className="flex-1 py-4 bg-pink-600 text-white font-bold rounded-2xl hover:bg-pink-700 transition-all shadow-lg"
+                  type="button"
+                  onClick={() => setProductForm({...productForm, images: [...productForm.images, '']})}
+                  className="flex items-center gap-2 px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-all"
                 >
-                  Gizlət
+                  <Plus size={20} /> + Daha çox köhnə şəkil əlavə et
                 </button>
               </div>
-            </div>
+
+              {/* Status Select */}
+              <div className="md:col-span-2 space-y-1 pt-4">
+                <label className="text-sm font-semibold text-gray-700">Məhsul Statusu</label>
+                <select 
+                  value={productForm.status} 
+                  onChange={(e) => setProductForm({...productForm, status: e.target.value})}
+                  className={`w-full px-6 py-4 rounded-2xl outline-none ${
+                    productForm.status === 'active' ? 'bg-[#dcfce7] text-[#15803d]' : 
+                    productForm.status === 'passive' ? 'bg-[#e5e7eb] text-[#374151]' : 
+                    'bg-[#fee2e2] text-[#dc2626]'
+                  }`}
+                >
+                  <option value="active">Aktiv</option>
+                  <option value="passive">Passiv</option>
+                  <option value="out_of_stock">Stokda yoxdur</option>
+                </select>
+              </div>
+              
+              {/* Boolean Filters */}
+              <div className="md:col-span-2 grid grid-cols-3 gap-4 pt-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={productForm.isInStock} onChange={e => setProductForm({...productForm, isInStock: e.target.checked})} className="w-4 h-4 text-pink-600 rounded" />
+                  <span className="text-sm">Anbarda Var</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={productForm.isSuperPrice} onChange={e => setProductForm({...productForm, isSuperPrice: e.target.checked})} className="w-4 h-4 text-pink-600 rounded" />
+                  <span className="text-sm">Super Qiymət</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={productForm.isNew} onChange={e => setProductForm({...productForm, isNew: e.target.checked})} className="w-4 h-4 text-pink-600 rounded" />
+                  <span className="text-sm">Yeni</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={productForm.isDiscount} onChange={e => setProductForm({...productForm, isDiscount: e.target.checked})} className="w-4 h-4 text-pink-600 rounded" />
+                  <span className="text-sm">Endirim</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={productForm.isPromotion} onChange={e => setProductForm({...productForm, isPromotion: e.target.checked})} className="w-4 h-4 text-pink-600 rounded" />
+                  <span className="text-sm">Aksiya</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={productForm.isHit} onChange={e => setProductForm({...productForm, isHit: e.target.checked})} className="w-4 h-4 text-pink-600 rounded" />
+                  <span className="text-sm">Hit</span>
+                </label>
+              </div>
+
+              {/* Collection, Product Type, Etc. */}
+              <input 
+                list="seriesList"
+                placeholder="Seriya Adı" 
+                value={productForm.seriesName} 
+                onChange={e => setProductForm({
+                  ...productForm, 
+                  seriesName: e.target.value
+                })} 
+                className="px-6 py-4 bg-gray-50 rounded-2xl outline-none" 
+              />
+              <datalist id="seriesList">
+                {series.map(s => <option key={s._id} value={s.name} />)}
+                {/* Also include the old collections for backward compatibility */}
+                {collections.map(c => <option key={c} value={c} />)}
+              </datalist>
+              <select value={productForm.productType} onChange={e => setProductForm({...productForm, productType: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none">
+                <option value="">Məhsul Növü Seçin</option>
+                {productTypes.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <select value={productForm.productEffect} onChange={e => setProductForm({...productForm, productEffect: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none">
+                <option value="">Məhsul Təsiri Seçin</option>
+                {productEffects.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <select value={productForm.skinType} onChange={e => setProductForm({...productForm, skinType: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none">
+                <option value="">Dərinin Tipi Seçin</option>
+                {skinTypes.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select value={productForm.hairType} onChange={e => setProductForm({...productForm, hairType: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none">
+                <option value="">Saçların Tipi Seçin</option>
+                {hairTypes.map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+
+              {/* Variants Section */}
+              <div className="md:col-span-2 space-y-4 pt-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold text-gray-700">Məhsul Variantları</label>
+                  <button 
+                    type="button" 
+                    onClick={handleAddVariantClick}
+                    className="flex items-center gap-2 px-4 py-2 bg-pink-100 text-pink-700 rounded-lg text-sm font-bold hover:bg-pink-200 transition-all"
+                  >
+                    <Plus size={16} /> Variant əlavə et
+                  </button>
+                </div>
+
+                {/* Variant Chips */}
+                <div className="flex flex-wrap gap-2">
+                  {productForm.variants?.map((variant, index) => (
+                    <div 
+                      key={index} 
+                      className="flex items-center gap-2 bg-gray-100 px-4 py-3 rounded-full text-sm border border-gray-200"
+                    >
+                      {variant.variantImage || variant.image ? (
+                        <img src={variant.variantImage || variant.image} alt={variant.name} className="w-8 h-8 rounded-full object-cover" />
+                      ) : null}
+                      <span className="font-semibold text-gray-800">{variant.sku}</span>
+                      <span className="text-gray-600">/ {variant.name}</span>
+                      <button 
+                        type="button"
+                        onClick={() => handleEditVariantClick(index)}
+                        className="p-1 text-blue-500 hover:bg-blue-100 rounded-full transition-all"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => removeVariant(index)}
+                        className="p-1 text-red-500 hover:bg-red-100 rounded-full transition-all"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add/Edit Variant Form */}
+                {showAddVariantForm && (
+                  <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-gray-700">{editingVariantIndex !== null ? 'Variantı Redaktə Et' : 'Yeni Variant Əlavə Et'}</span>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setShowAddVariantForm(false);
+                          setEditingVariantIndex(null);
+                          setTempVariant({
+                            sku: '',
+                            name: '',
+                            image: '',
+                            variantImage: '',
+                            images: [''],
+                            stock: '',
+                            status: 'active',
+                            description: '',
+                            ingredients: '',
+                            usage: '',
+                            weight: { value: null, unit: 'q' },
+                            volume: { value: null, unit: 'ml' }
+                          });
+                          setIsTempAccordionOpen(false);
+                        }}
+                        className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg transition-all"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-600">SKU *</label>
+                        <input 
+                          placeholder="Variant SKU" 
+                          value={tempVariant.sku}
+                          onChange={e => setTempVariant({...tempVariant, sku: e.target.value})}
+                          className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-600">Variant Adı *</label>
+                        <input 
+                          placeholder="Variant adı (rəng, ölçü və s.)" 
+                          value={tempVariant.name}
+                          onChange={e => setTempVariant({...tempVariant, name: e.target.value})}
+                          className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-600">Stok</label>
+                        <input 
+                          type="number" 
+                          placeholder="Stok sayı" 
+                          value={tempVariant.stock}
+                          onChange={e => setTempVariant({...tempVariant, stock: e.target.value})}
+                          className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-600">Status</label>
+                      <select 
+                        value={tempVariant.status}
+                        onChange={e => setTempVariant({...tempVariant, status: e.target.value})}
+                        className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                      >
+                        <option value="active">Aktiv</option>
+                        <option value="passive">Passiv</option>
+                        <option value="out_of_stock">Stokda yoxdur</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-gray-600">Variant Şəkli (variantImage)</label>
+                      <input 
+                        placeholder="Variantın şəkil linki" 
+                        value={tempVariant.variantImage}
+                        onChange={e => setTempVariant({...tempVariant, variantImage: e.target.value})}
+                        className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                      />
+                    </div>
+
+                    {/* Backward compatibility: Old variant image field */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-gray-500">Köhnə Variant Şəkli (geriyə uyğunluq üçün)</label>
+                      <input 
+                        placeholder="Köhnə variant şəkil linki" 
+                        value={tempVariant.image}
+                        onChange={e => setTempVariant({...tempVariant, image: e.target.value})}
+                        className="w-full px-4 py-3 bg-gray-100 rounded-xl outline-none border border-gray-200"
+                      />
+                    </div>
+
+                    {/* Backward compatibility: Old variant images array */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-gray-500">Köhnə Əlavə Şəkillər (geriyə uyğunluq üçün)</label>
+                        <button 
+                          type="button"
+                          onClick={() => setTempVariant({...tempVariant, images: [...tempVariant.images, '']})}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
+                        >
+                          + Şəkil əlavə et
+                        </button>
+                      </div>
+                      {tempVariant.images.map((img, imgIndex) => (
+                        <div key={imgIndex} className="flex gap-2">
+                          <input 
+                            placeholder="Şəkil linki" 
+                            value={img}
+                            onChange={e => {
+                              const newImages = [...tempVariant.images];
+                              newImages[imgIndex] = e.target.value;
+                              setTempVariant({...tempVariant, images: newImages});
+                            }}
+                            className="flex-1 px-4 py-3 bg-gray-100 rounded-xl outline-none border border-gray-200"
+                          />
+                          {tempVariant.images.length > 1 && (
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                const newImages = tempVariant.images.filter((_, i) => i !== imgIndex);
+                                setTempVariant({...tempVariant, images: newImages});
+                              }}
+                              className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-all"
+                            >
+                              <X size={18} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Accordion for Advanced Variant Info (tempVariant) */}
+                    <div className="border-t border-gray-200 pt-4">
+                      {/* We need to add state for accordion, but since we can't add state in render, let's use a useState call here? Wait no, let's create a state variable for this accordion! Wait, let's first add a state variable [isTempAccordionOpen, setIsTempAccordionOpen]! */}
+                      {/* Wait let's first add the state, then use it! */}
+                      <button 
+                        type="button"
+                        onClick={() => setIsTempAccordionOpen(!isTempAccordionOpen)}
+                        className="flex items-center justify-between w-full text-left text-sm font-semibold text-gray-700 hover:text-pink-600"
+                      >
+                        <span>Ətraflı variant məlumatları</span>
+                        <ChevronRight size={18} className={`transition-transform ${isTempAccordionOpen ? 'rotate-90' : ''}`} />
+                      </button>
+
+                      {isTempAccordionOpen && (
+                        <div className="mt-4 space-y-4">
+                          {/* Variant Description */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-gray-600">Variant təsviri</label>
+                            <textarea 
+                              placeholder="Variant üçün xüsusi təsvir (boş buraxılırsa əsas məhsulun təsviri istifadə olunacaq)" 
+                              value={tempVariant.description || ''}
+                              onChange={e => setTempVariant({...tempVariant, description: e.target.value})}
+                              className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              rows="3"
+                            />
+                          </div>
+
+                          {/* Variant Ingredients */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-gray-600">Variant tərkibi</label>
+                            <textarea 
+                              placeholder="Variant üçün xüsusi tərkib (boş buraxılırsa əsas məhsulun tərkibi istifadə olunacaq)" 
+                              value={tempVariant.ingredients || ''}
+                              onChange={e => setTempVariant({...tempVariant, ingredients: e.target.value})}
+                              className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              rows="3"
+                            />
+                          </div>
+
+                          {/* Variant Usage */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-gray-600">Variant istifadə qaydası</label>
+                            <textarea 
+                              placeholder="Variant üçün xüsusi istifadə qaydası (boş buraxılırsa əsas məhsulun istifadə qaydası istifadə olunacaq)" 
+                              value={tempVariant.usage || ''}
+                              onChange={e => setTempVariant({...tempVariant, usage: e.target.value})}
+                              className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              rows="3"
+                            />
+                          </div>
+
+                          {/* Variant Weight */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-gray-600">Variant çəkisi</label>
+                            <div className="flex gap-2">
+                              <input 
+                                type="number" 
+                                placeholder="Çəki dəyəri" 
+                                value={tempVariant.weight?.value || ''}
+                                onChange={e => setTempVariant({
+                                  ...tempVariant, 
+                                  weight: { 
+                                    ...tempVariant.weight, 
+                                    value: e.target.value ? parseFloat(e.target.value) : null 
+                                  }
+                                })}
+                                className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              />
+                              <select 
+                                value={tempVariant.weight?.unit || 'q'}
+                                onChange={e => setTempVariant({
+                                  ...tempVariant, 
+                                  weight: { 
+                                    ...tempVariant.weight, 
+                                    unit: e.target.value 
+                                  }
+                                })}
+                                className="px-4 py-3 bg-white rounded-xl outline-none border border-gray-200 min-w-[80px]"
+                              >
+                                <option value="q">q</option>
+                                <option value="kq">kq</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Variant Volume */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-gray-600">Variant həcmi</label>
+                            <div className="flex gap-2">
+                              <input 
+                                type="number" 
+                                placeholder="Həcm dəyəri" 
+                                value={tempVariant.volume?.value || ''}
+                                onChange={e => setTempVariant({
+                                  ...tempVariant, 
+                                  volume: { 
+                                    ...tempVariant.volume, 
+                                    value: e.target.value ? parseFloat(e.target.value) : null 
+                                  }
+                                })}
+                                className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              />
+                              <select 
+                                value={tempVariant.volume?.unit || 'ml'}
+                                onChange={e => setTempVariant({
+                                  ...tempVariant, 
+                                  volume: { 
+                                    ...tempVariant.volume, 
+                                    unit: e.target.value 
+                                  }
+                                })}
+                                className="px-4 py-3 bg-white rounded-xl outline-none border border-gray-200 min-w-[80px]"
+                              >
+                                <option value="ml">ml</option>
+                                <option value="l">l</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 justify-end pt-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setShowAddVariantForm(false);
+                          setEditingVariantIndex(null);
+                          setTempVariant({
+                            sku: '',
+                            name: '',
+                            image: '',
+                            variantImage: '',
+                            images: [''],
+                            stock: '',
+                            status: 'active',
+                            description: '',
+                            ingredients: '',
+                            usage: '',
+                            weight: { value: null, unit: 'q' },
+                            volume: { value: null, unit: 'ml' }
+                          });
+                          setIsTempAccordionOpen(false);
+                        }}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-300 transition-all"
+                      >
+                        İmtina et
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={saveVariant}
+                        className="px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-bold hover:bg-pink-700 transition-all"
+                      >
+                        {editingVariantIndex !== null ? 'Yadda Saxla' : 'Əlavə Et'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button type="submit" className="md:col-span-2 py-5 bg-pink-600 text-white font-bold rounded-2xl shadow-lg hover:bg-pink-700 transition-all">Yadda Saxla</button>
+            </form>
           </div>
         </div>
       )}

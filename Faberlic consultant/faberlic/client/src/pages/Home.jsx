@@ -1,9 +1,9 @@
-import { ArrowRight, Bot, ShoppingBag, UserPlus, Sparkles, MessageCircle, ChevronLeft, ChevronRight, Heart, Search } from 'lucide-react';
+import { ArrowRight, Bot, ShoppingBag, UserPlus, Sparkles, MessageCircle, ChevronLeft, ChevronRight, Heart, Search, Sparkles as SparklesIcon, Palette, User, Baby, Droplets, Scissors, Star, Loader, Plus, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
+import { useNotification } from '../contexts/NotificationContext';
 
 const Home = ({ searchTerm = "" }) => {
   // All images from public/images folder
@@ -32,11 +32,70 @@ const Home = ({ searchTerm = "" }) => {
     },
   ];
 
+  // Cart & button states
+  const [cartItems, setCartItems] = useState([]);
+  const [loadingProductIds, setLoadingProductIds] = useState(new Set());
+  const [successProductIds, setSuccessProductIds] = useState(new Set());
+
+  // Category data
+  const categories = [
+    { 
+      id: 1, 
+      name: 'Üz Qulluğu', 
+      mainCategorySlug: 'qulluq',
+      subCategorySlug: 'uze-qulluq',
+      icon: <Palette size={32} />, 
+      color: 'bg-pink-100 text-pink-600' 
+    },
+    { 
+      id: 2, 
+      name: 'Makiyaj', 
+      mainCategorySlug: 'makiyaj',
+      subCategorySlug: null,
+      icon: <SparklesIcon size={32} />, 
+      color: 'bg-purple-100 text-purple-600' 
+    },
+    { 
+      id: 3, 
+      name: 'Parfümeriya', 
+      mainCategorySlug: 'parfümeriya',
+      subCategorySlug: null,
+      icon: <Star size={32} />, 
+      color: 'bg-yellow-100 text-yellow-600' 
+    },
+    { 
+      id: 4, 
+      name: 'Saç Qulluğu', 
+      mainCategorySlug: 'qulluq',
+      subCategorySlug: 'saclar',
+      icon: <Scissors size={32} />, 
+      color: 'bg-blue-100 text-blue-600' 
+    },
+    { 
+      id: 5, 
+      name: 'Bədən Qulluğu', 
+      mainCategorySlug: 'qulluq',
+      subCategorySlug: 'badene-qulluq',
+      icon: <Droplets size={32} />, 
+      color: 'bg-green-100 text-green-600' 
+    },
+    { 
+      id: 6, 
+      name: 'Uşaqlar üçün', 
+      mainCategorySlug: 'usaqlara',
+      subCategorySlug: null,
+      icon: <Baby size={32} />, 
+      color: 'bg-orange-100 text-orange-600' 
+    }
+  ];
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [allProducts, setAllProducts] = useState([]);
   const [products, setProducts] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const navigate = useNavigate();
+  const { showSuccess, showError, showInfo } = useNotification();
   const imgRefs = useRef([]);
 
   // Auto-slide every 3 seconds
@@ -64,15 +123,44 @@ const Home = ({ searchTerm = "" }) => {
   useEffect(() => {
     fetchProducts();
     fetchFavorites();
+    fetchCart();
   }, []);
+
+  const shuffleArray = (array) => {
+    return [...array].sort(() => Math.random() - 0.5);
+  };
 
   const fetchProducts = async () => {
     try {
       const response = await axios.get('http://127.0.0.1:5000/api/products');
-      setProducts(response.data.slice(0, 8)); // Show first 8 products
+      const allProds = response.data;
+      setAllProducts(allProds);
+      
+      // Filter active products and shuffle
+      const activeProducts = allProds.filter(p => p.status !== 'passive');
+      const shuffledProducts = shuffleArray(activeProducts);
+      setProducts(shuffledProducts.slice(0, 8));
     } catch (error) {
       console.error('Product fetch error:', error);
     }
+  };
+
+  // Calculate product count for each category
+  const getProductCount = (mainCategorySlug, subCategorySlug) => {
+    return allProducts.filter(product => {
+      // Check if product has categories array with matching slugs
+      if (product.categories && Array.isArray(product.categories)) {
+        return product.categories.some(cat => {
+          const matchesMain = cat.categorySlug === mainCategorySlug;
+          const matchesSub = !subCategorySlug || cat.subCategorySlug === subCategorySlug;
+          return matchesMain && matchesSub;
+        });
+      }
+      // Fallback to old single category fields
+      const matchesMain = product.categorySlug === mainCategorySlug;
+      const matchesSub = !subCategorySlug || product.subCategorySlug === subCategorySlug;
+      return matchesMain && matchesSub;
+    }).length;
   };
 
   const fetchFavorites = async () => {
@@ -94,7 +182,7 @@ const Home = ({ searchTerm = "" }) => {
   const toggleFavorite = async (productId) => {
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.info('Bu əməliyyat üçün daxil olmalısınız.');
+      showInfo('Bu əməliyyat üçün daxil olmalısınız.');
       navigate('/login');
       return;
     }
@@ -110,37 +198,86 @@ const Home = ({ searchTerm = "" }) => {
       setFavorites(newFavorites);
       
       const isNowFavorite = newFavorites.includes(productId.toString());
-      toast.success(isNowFavorite ? 'Məhsul seçilmişlərə əlavə edildi!' : 'Məhsul seçilmişlərdən silindi!');
+      showSuccess(isNowFavorite ? 'Məhsul seçilmişlərə əlavə edildi!' : 'Məhsul seçilmişlərdən silindi!');
     } catch (error) {
-      toast.error('Xəta baş verdi');
+      showError('Xəta baş verdi');
     }
   };
 
-  const addToCart = async (product) => {
+  const fetchCart = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/api/users/cart', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCartItems(response.data.cart);
+    } catch (error) {
+      console.error('Fetch cart error:', error);
+    }
+  };
+
+  const isProductInCart = (productId, variantSku = null) => {
+    return cartItems.some(item => {
+      const itemProductId = item.product?._id || item.productId;
+      const matchesProduct = itemProductId === productId;
+      const matchesVariant = !variantSku || item.variantSku === variantSku;
+      return matchesProduct && matchesVariant;
+    });
+  };
+
+  const addToCart = async (product, variantSku = null) => {
+    const productId = product._id || product.id;
+    
     if (product.status === 'passive' || product.status === 'out_of_stock') {
-      toast.error('Bu məhsul artıq mövcud deyil');
+      showError('Bu məhsul artıq mövcud deyil');
       return;
     }
     
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.info('Bu əməliyyat üçün daxil olmalısınız.');
+      showInfo('Bu əməliyyat üçün daxil olmalısınız.');
       navigate('/login');
       return;
     }
 
+    // Set loading state
+    setLoadingProductIds(prev => new Set(prev).add(productId));
+    
     try {
-      const payload = { productId: product._id || product.id, quantity: 1 };
+      const payload = { 
+        productId, 
+        quantity: 1,
+        ...(variantSku && { variantSku })
+      };
       console.log('Adding to cart (Home):', payload);
       const response = await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       console.log('Add to cart response:', response.data);
-      toast.success('Məhsul səbətə əlavə edildi!');
+      
+      // Update success state and refetch cart
+      setSuccessProductIds(prev => new Set(prev).add(productId));
+      fetchCart();
+      
+      // Remove success state after 1 second
+      setTimeout(() => {
+        setSuccessProductIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(productId);
+          return newSet;
+        });
+      }, 1000);
     } catch (error) {
       console.error('Add to cart error:', error.response?.data || error.message);
-      toast.error(error.response?.data?.error || 'Xəta baş verdi');
+      showError(error.response?.data?.error || 'Xəta baş verdi');
+    } finally {
+      setLoadingProductIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productId);
+        return newSet;
+      });
     }
   };
 
@@ -254,7 +391,13 @@ const Home = ({ searchTerm = "" }) => {
               >
                 <div className="relative aspect-square overflow-hidden bg-pink-50">
                   <img 
-                    src={product.images?.[0] || product.image} 
+                    src={
+                      product.variants?.[0]?.variantImage ||
+                      product.variants?.[0]?.image ||
+                      product.commonImages?.[0] ||
+                      product.images?.[0] ||
+                      product.image
+                    }
                     alt={product.name} 
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
@@ -301,7 +444,7 @@ const Home = ({ searchTerm = "" }) => {
                     {product.status === 'out_of_stock' ? (
                       <button 
                         disabled
-                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-gray-100 text-gray-500 font-bold text-xs md:text-sm rounded-xl cursor-not-allowed transition-all"
+                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-gray-100 text-gray-500 font-bold text-xs md:text-sm rounded-xl cursor-not-allowed transition-all flex items-center gap-1"
                       >
                         Stokda yoxdur
                       </button>
@@ -312,9 +455,18 @@ const Home = ({ searchTerm = "" }) => {
                           e.stopPropagation();
                           addToCart(product);
                         }} 
-                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-pink-50 text-pink-600 font-bold text-xs md:text-sm rounded-xl hover:bg-pink-600 hover:text-white transition-all"
+                        disabled={loadingProductIds.has(product._id)}
+                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-pink-50 text-pink-600 font-bold text-xs md:text-sm rounded-xl hover:bg-pink-600 hover:text-white transition-all flex items-center justify-center gap-1"
                       >
-                        Səbətə
+                        {loadingProductIds.has(product._id) ? (
+                          <Loader size={14} className="animate-spin" />
+                        ) : successProductIds.has(product._id) ? (
+                          <Check size={14} />
+                        ) : isProductInCart(product._id) ? (
+                          <><Plus size={14} /> Daha çox əlavə et</>
+                        ) : (
+                          'Səbətə'
+                        )}
                       </button>
                     )}
                     <button
@@ -338,37 +490,36 @@ const Home = ({ searchTerm = "" }) => {
         </div>
       </div>
 
-      {/* Features Section */}
+      {/* Popular Categories Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900">Niyə Bizi Seçməlisiniz?</h2>
-          <p className="mt-4 text-gray-500 max-w-2xl mx-auto">Biz sizə sadəcə kosmetika deyil, fərdi qulluq təcrübəsi təqdim edirik.</p>
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900">Populyar Kateqoriyalar</h2>
+          <p className="mt-4 text-gray-500 max-w-2xl mx-auto">Axtardığınız məhsulları kateqoriyalar üzrə rahat tapın.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-pink-100 hover:shadow-md transition-all">
-            <div className="w-14 h-14 bg-pink-100 text-pink-600 rounded-xl flex items-center justify-center mb-6">
-              <Bot size={28} />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Ağıllı AI Məsləhətçi</h3>
-            <p className="text-gray-500 leading-relaxed">Dərinizin fotosunu yükləyin, AI onu analiz etsin və sizə ən uyğun məhsulları seçsin.</p>
-          </div>
-
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-pink-100 hover:shadow-md transition-all">
-            <div className="w-14 h-14 bg-pink-100 text-pink-600 rounded-xl flex items-center justify-center mb-6">
-              <Sparkles size={28} />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Eksklüziv Endirimlər</h3>
-            <p className="text-gray-500 leading-relaxed">Kataloq qiymətindən daha ucuz! Qeydiyyatdan keçərək 20% endirim əldə edin.</p>
-          </div>
-
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-pink-100 hover:shadow-md transition-all">
-            <div className="w-14 h-14 bg-green-100 text-green-600 rounded-xl flex items-center justify-center mb-6">
-              <UserPlus size={28} />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Xanımlar Üçün Qeydiyyat</h3>
-            <p className="text-gray-500 leading-relaxed">Komandama qoşulun, Faberlikin rəsmi saytında qeydiyyatdan keçin və qazanın.</p>
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+          {categories.map((category) => {
+            const productCount = getProductCount(category.mainCategorySlug, category.subCategorySlug);
+            let toUrl = `/products?category=${category.mainCategorySlug}`;
+            if (category.subCategorySlug) {
+              toUrl += `&subcategory=${category.subCategorySlug}`;
+            }
+            return (
+              <Link
+                key={category.id}
+                to={toUrl}
+                className="group"
+              >
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg transition-all text-center group-hover:border-pink-200">
+                  <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${category.color}`}>
+                    {category.icon}
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-pink-600">{category.name}</h3>
+                  <p className="text-gray-500 text-sm">{productCount} məhsul</p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
 

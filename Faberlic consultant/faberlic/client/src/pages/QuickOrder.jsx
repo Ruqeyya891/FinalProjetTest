@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Search, Info, Heart } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useNotification } from '../contexts/NotificationContext';
 
 const QuickOrder = () => {
   const [cartItems, setCartItems] = useState([]);
@@ -10,6 +10,7 @@ const QuickOrder = () => {
   const [loading, setLoading] = useState(true);
   const [articleSearch, setArticleSearch] = useState('');
   const navigate = useNavigate();
+  const { showSuccess, showError, showInfo } = useNotification();
 
   useEffect(() => {
     fetchCart();
@@ -47,7 +48,7 @@ const QuickOrder = () => {
   const addToCart = async (product) => {
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.info('Bu əməliyyat üçün daxil olmalısınız.');
+      showInfo('Bu əməliyyat üçün daxil olmalısınız.');
       navigate('/login');
       return;
     }
@@ -58,10 +59,10 @@ const QuickOrder = () => {
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      toast.success('Məhsul səbətə əlavə edildi!');
+      showSuccess('Məhsul səbətə əlavə edildi!');
       fetchCart();
     } catch (error) {
-      toast.error('Xəta baş verdi');
+      showError('Xəta baş verdi');
     }
   };
 

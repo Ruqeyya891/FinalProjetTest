@@ -61,17 +61,13 @@ const productSchema = new mongoose.Schema(
     ],
 
     images: {
-      type: [String],
-      default: [],
-      validate: [
-        {
-          validator: function(v) {
-            return Array.isArray(v) && v.length > 0;
-          },
-          message: 'Ən azı 1 şəkil məcburidir'
-        }
-      ]
-    },
+    type: [String],
+    default: []
+  },
+  commonImages: {
+    type: [String],
+    default: []
+  },
 
     weight: {
       value: { type: Number, min: 0, default: null },
@@ -172,6 +168,33 @@ const productSchema = new mongoose.Schema(
       unique: true,
       required: true,
     },
+
+    variants: [
+      {
+        sku: { type: String, required: true },
+        name: { type: String, required: true },
+        image: { type: String, default: "" },
+        variantImage: { type: String, default: "" },
+        images: { type: [String], default: [] },
+        stock: { type: Number, default: 0 },
+        status: { 
+          type: String, 
+          enum: ['active', 'passive', 'out_of_stock'], 
+          default: 'active' 
+        },
+        description: { type: String, default: "" },
+        ingredients: { type: String, default: "" },
+        usage: { type: String, default: "" },
+        weight: {
+          value: { type: Number, min: 0, default: null },
+          unit: { type: String, enum: ['q', 'kq'], default: 'q' }
+        },
+        volume: {
+          value: { type: Number, min: 0, default: null },
+          unit: { type: String, enum: ['ml', 'l'], default: 'ml' }
+        }
+      }
+    ]
   },
   {
     timestamps: true,

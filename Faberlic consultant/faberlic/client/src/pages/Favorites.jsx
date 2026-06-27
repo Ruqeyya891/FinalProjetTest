@@ -1,16 +1,34 @@
 import { useState, useEffect } from 'react';
-import { Heart, ShoppingCart, Trash2, ArrowRight, Info } from 'lucide-react';
+import { Heart, ShoppingCart, Trash2, ArrowRight, Info, Loader, Plus, Check } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import axios from 'axios';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  IconButton,
+  DialogContentText
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
+import { useNotification } from '../contexts/NotificationContext';
 
 const Favorites = () => {
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { showSuccess, showError, showConfirm } = useNotification();
+  
+  // Cart & button states
+  const [cartItems, setCartItems] = useState([]);
+  const [loadingProductIds, setLoadingProductIds] = useState(new Set());
+  const [successProductIds, setSuccessProductIds] = useState(new Set());
 
   useEffect(() => {
     fetchFavorites();
+    fetchCart();
   }, []);
 
   const fetchFavorites = async () => {
@@ -25,13 +43,38 @@ const Favorites = () => {
       });
       setFavorites(response.data.favorites);
     } catch (error) {
-      toast.error('Seçilmişləri yükləyərkən xəta baş verdi');
+      showError('Seçilmişləri yükləyərkən xəta baş verdi');
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchCart = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/api/users/cart', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCartItems(response.data.cart);
+    } catch (error) {
+      console.error('Fetch cart error:', error);
+    }
+  };
+
+  const isProductInCart = (productId, variantSku = null) => {
+    return cartItems.some(item => {
+      const itemProductId = item.product?._id || item.productId;
+      const matchesProduct = itemProductId === productId;
+      const matchesVariant = !variantSku || item.variantSku === variantSku;
+      return matchesProduct && matchesVariant;
+    });
+  };
+
   const removeFavorite = async (productId) => {
+    const confirmed = await showConfirm();
+    if (!confirmed) return;
+    
     const token = localStorage.getItem('token');
     try {
       const response = await axios.post('http://127.0.0.1:5000/api/users/favorites/toggle', 
@@ -39,22 +82,48 @@ const Favorites = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setFavorites(favorites.filter(item => item._id !== productId));
-      toast.success('Məhsul seçilmişlərdən silindi');
+      showSuccess('Məhsul seçilmişlərdən silindi');
     } catch (error) {
-      toast.error('Xəta baş verdi');
+      showError('Xəta baş verdi');
     }
   };
 
-  const addToCart = async (productId) => {
+  const addToCart = async (product) => {
+    const productId = product._id;
+    
     const token = localStorage.getItem('token');
+    if (!token) {
+      showInfo('Bu əməliyyat üçün daxil olmalısınız.');
+      navigate('/login');
+      return;
+    }
+
+    setLoadingProductIds(prev => new Set(prev).add(productId));
+    
     try {
       await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
         { productId, quantity: 1 },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      toast.success('Məhsul səbətə əlavə edildi!');
+      
+      setSuccessProductIds(prev => new Set(prev).add(productId));
+      fetchCart();
+      
+      setTimeout(() => {
+        setSuccessProductIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(productId);
+          return newSet;
+        });
+      }, 1000);
     } catch (error) {
-      toast.error('Xəta baş verdi');
+      showError('Xəta baş verdi');
+    } finally {
+      setLoadingProductIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productId);
+        return newSet;
+      });
     }
   };
 
@@ -77,7 +146,17 @@ const Favorites = () => {
             {favorites.map((product) => (
               <div key={product._id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all">
                 <div className="relative aspect-square">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <img 
+                    src={
+                      product.variants?.[0]?.variantImage ||
+                      product.variants?.[0]?.image ||
+                      product.commonImages?.[0] ||
+                      product.images?.[0] ||
+                      product.image
+                    } 
+                    alt={product.name} 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
                   <button 
                     onClick={() => removeFavorite(product._id)}
                     className="absolute top-4 right-4 p-2 bg-white text-pink-600 rounded-full shadow-md hover:bg-pink-600 hover:text-white transition-all"
@@ -94,8 +173,20 @@ const Favorites = () => {
                       <Link to={`/product/${product._id}`} className="p-2 bg-gray-50 text-gray-600 rounded-xl hover:bg-gray-100">
                         <Info size={20} />
                       </Link>
-                      <button onClick={() => addToCart(product._id)} className="p-2 bg-pink-50 text-pink-600 rounded-xl hover:bg-pink-600 hover:text-white">
-                        <ShoppingCart size={20} />
+                      <button 
+                        onClick={() => addToCart(product)} 
+                        disabled={loadingProductIds.has(product._id)}
+                        className="p-2 bg-pink-50 text-pink-600 rounded-xl hover:bg-pink-600 hover:text-white flex items-center justify-center"
+                      >
+                        {loadingProductIds.has(product._id) ? (
+                          <Loader size={20} className="animate-spin" />
+                        ) : successProductIds.has(product._id) ? (
+                          <Check size={20} />
+                        ) : isProductInCart(product._id) ? (
+                          <Plus size={20} />
+                        ) : (
+                          <ShoppingCart size={20} />
+                        )}
                       </button>
                     </div>
                   </div>

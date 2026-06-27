@@ -47,7 +47,7 @@ const getFavorites = async (req, res) => {
 const addToCart = async (req, res) => {
     try {
         console.log("Cart add request body:", req.body);
-        const { productId, quantity } = req.body;
+        const { productId, quantity, variantSku, variantName } = req.body;
         
         // 1. productId validation
         if (!productId) {
@@ -72,9 +72,19 @@ const addToCart = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Product not found' });
         }
         
-        // Check product status
+        // Check product status OR variant status
         if (product.status === 'passive' || product.status === 'out_of_stock') {
             return res.status(400).json({ success: false, error: 'Bu məhsul artıq mövcud deyil' });
+        }
+
+        // Check variant status if variantSku is provided
+        if (variantSku) {
+            const variant = product.variants?.find(v => v.sku === variantSku);
+            if (variant) {
+                if (variant.status === 'passive' || variant.status === 'out_of_stock' || variant.stock <= 0) {
+                    return res.status(400).json({ success: false, error: 'Bu məhsul artıq mövcud deyil' });
+                }
+            }
         }
 
         const user = await User.findById(userId);
@@ -93,8 +103,11 @@ const addToCart = async (req, res) => {
             user.cart = [];
         }
 
+        // Find cart item: check productId AND variantSku (if provided)
         const cartItemIndex = user.cart.findIndex(item => 
-            item && item.product && item.product.toString() === targetId
+            item && item.product && 
+            item.product.toString() === targetId && 
+            item.variantSku === variantSku
         );
 
         const qtyToAdd = Number(quantity) || 1;
@@ -102,7 +115,12 @@ const addToCart = async (req, res) => {
         if (cartItemIndex > -1) {
             user.cart[cartItemIndex].quantity += qtyToAdd;
         } else {
-            user.cart.push({ product: productId, quantity: qtyToAdd });
+            user.cart.push({ 
+                product: productId, 
+                quantity: qtyToAdd,
+                variantSku: variantSku || null,
+                variantName: variantName || null
+            });
         }
 
         console.log(`Saving user ${userId} with ${user.cart.length} items in cart`);
@@ -136,12 +154,20 @@ const addToCart = async (req, res) => {
 const removeFromCart = async (req, res) => {
     try {
         const { productId } = req.params;
+        const { variantSku } = req.query; // Optional variantSku from query
         const user = await User.findById(req.user._id);
         if (!user) {
             return res.status(404).json({ success: false, error: 'İstifadəçi tapılmadı' });
         }
         if (!user.cart) user.cart = [];
-        user.cart = user.cart.filter(item => item.product && item.product.toString() !== productId);
+        
+        // Filter items: if variantSku provided, match product AND variant; else match product
+        user.cart = user.cart.filter(item => 
+            !(item.product && 
+              item.product.toString() === productId && 
+              (variantSku ? item.variantSku === variantSku : true))
+        );
+        
         await user.save();
         res.status(200).json({ success: true, cart: user.cart });
     } catch (error) {
@@ -151,15 +177,21 @@ const removeFromCart = async (req, res) => {
 
 const updateCartQuantity = async (req, res) => {
     try {
-        const { productId, quantity } = req.body;
+        const { productId, quantity, variantSku } = req.body;
         const user = await User.findById(req.user._id);
         if (!user) {
             return res.status(404).json({ success: false, error: 'İstifadəçi tapılmadı' });
         }
         if (!user.cart) user.cart = [];
-        const cartItem = user.cart.find(item => item.product && item.product.toString() === productId);
+        
+        // Find cart item: match productId AND (variantSku matches OR both are null/undefined)
+        const cartItem = user.cart.find(item => 
+            item.product && 
+            item.product.toString() === productId && 
+            (variantSku ? item.variantSku === variantSku : !item.variantSku)
+        );
         if (cartItem) {
-            cartItem.quantity = Number(quantity);
+            cartItem.quantity = Math.max(1, Number(quantity));
             await user.save();
         }
         res.status(200).json({ success: true, cart: user.cart });
@@ -174,7 +206,9 @@ const getCart = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, error: 'İstifadəçi tapılmadı' });
         }
-        res.status(200).json({ success: true, cart: user.cart || [] });
+        // Filter out items where product is null (deleted product)
+        const validCart = (user.cart || []).filter(item => item.product);
+        res.status(200).json({ success: true, cart: validCart });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

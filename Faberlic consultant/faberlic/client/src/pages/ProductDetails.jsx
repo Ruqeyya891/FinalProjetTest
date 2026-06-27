@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Heart, ArrowLeft, Sparkles, ChevronRight } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { ShoppingCart, Heart, ArrowLeft, Sparkles, ChevronRight, Loader, Plus, Check } from 'lucide-react';
 import axios from 'axios';
+import { useNotification } from '../contexts/NotificationContext';
 
 // Helper function to format price
 const formatPrice = (price) => {
@@ -71,18 +71,94 @@ const ExpandableText = ({ text, maxHeight = 220 }) => {
 const ProductDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { showSuccess, showError, showInfo } = useNotification();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const [activeTab, setActiveTab] = useState('description');
   const [relatedProducts, setRelatedProducts] = useState([]);
+  const [selectedVariant, setSelectedVariant] = useState(null);
 
-  const images = product?.images?.length > 0 ? product.images : [product?.image];
+  // Cart & button states
+  const [cartItems, setCartItems] = useState([]);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [showSuccessIcon, setShowSuccessIcon] = useState(false);
+
+  // Get clean base product name without any variant info
+  const getBaseProductName = () => {
+    if (!product) return '';
+    return product.name.replace(/,\s*tonu\s*".*?"/g, '').trim();
+  };
+
+  // Get clean variant name without base product info
+  const getCleanVariantName = (variant) => {
+    if (!variant) return '';
+    const variantName = variant.name;
+    
+    // Try to extract just the variant name if it includes base product and ", tonu ..."
+    // Handle both double quotes " and single quotes '
+    const match = variantName.match(/tonu\s*['"](.*?)['"]/);
+    if (match && match[1]) {
+      return match[1];
+    }
+    
+    // If no match, return as is
+    return variantName;
+  };
+
+  // Get current images: use variant variantImage + commonImages, with backward compatibility
+  const currentImages = product ? (() => {
+    const variantImg = selectedVariant?.variantImage || selectedVariant?.image;
+    const commonImgs = product.commonImages?.length > 0 ? product.commonImages : product.images;
+    
+    if (selectedVariant) {
+      if (variantImg) {
+        return [variantImg, ...commonImgs].filter(Boolean);
+      } else {
+        return commonImgs.filter(Boolean);
+      }
+    } else {
+      return commonImgs.filter(Boolean);
+    }
+  })() : [];
+
+  // Get current sku: use variant sku if available, else product sku
+  const currentSku = product ? (selectedVariant?.sku || product.sku) : '';
+
+  // Check if current variant/stock is out of stock
+  const isOutOfStock = product ? (selectedVariant 
+    ? (selectedVariant.stock <= 0 || selectedVariant.status === 'out_of_stock' || selectedVariant.status === 'passive')
+    : (product.status === 'out_of_stock' || product.status === 'passive')) : true;
+
+  // Check if product/variant is already in cart
+  const isProductInCart = (productId, variantSku = null) => {
+    return cartItems.some(item => {
+      const itemProductId = item.product?._id || item.productId;
+      const matchesProduct = itemProductId === productId;
+      const matchesVariant = !variantSku || item.variantSku === variantSku;
+      return matchesProduct && matchesVariant;
+    });
+  };
+
+  // Fetch cart items
+  const fetchCart = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/api/users/cart', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCartItems(response.data.cart);
+    } catch (error) {
+      console.error('Fetch cart error:', error);
+    }
+  };
 
   useEffect(() => {
     fetchProduct();
     checkIfFavorite();
+    fetchCart();
   }, [id]);
 
   const fetchProduct = async () => {
@@ -90,9 +166,16 @@ const ProductDetails = () => {
       const response = await axios.get(`http://127.0.0.1:5000/api/products/${id}`);
       const productData = response.data;
       setProduct(productData);
+      // Set initial selected variant to first active variant if available
+      if (productData.variants && productData.variants.length > 0) {
+        const firstActiveVariant = productData.variants.find(v => v.status === 'active');
+        setSelectedVariant(firstActiveVariant || productData.variants[0]);
+      } else {
+        setSelectedVariant(null);
+      }
       fetchRelatedProducts(productData);
     } catch (error) {
-      toast.error('Məhsul tapılmadı');
+      showError('Məhsul tapılmadı');
       navigate('/products');
     } finally {
       setLoading(false);
@@ -104,22 +187,24 @@ const ProductDetails = () => {
       const response = await axios.get('http://127.0.0.1:5000/api/products');
       let products = response.data.filter(p => p._id !== currentProduct._id && p.status !== 'passive');
       
-      // First try to find products from same series
-      const seriesProducts = products.filter(p => 
-        (p.seriesSlug && currentProduct.seriesSlug && p.seriesSlug === currentProduct.seriesSlug) ||
-        (p.collection && currentProduct.collection && p.collection === currentProduct.collection)
-      );
+      // Sort products by priority:
+      // 1. Same seriesSlug
+      // 2. Same childCategorySlug
+      // 3. Same subCategorySlug
+      // 4. Same categorySlug
+      // 5. Others
+      const sortedProducts = [...products].sort((a, b) => {
+        const getPriority = (p) => {
+          if (p.seriesSlug && currentProduct.seriesSlug && p.seriesSlug === currentProduct.seriesSlug) return 1;
+          if (p.childCategorySlug && currentProduct.childCategorySlug && p.childCategorySlug === currentProduct.childCategorySlug) return 2;
+          if (p.subCategorySlug && currentProduct.subCategorySlug && p.subCategorySlug === currentProduct.subCategorySlug) return 3;
+          if (p.categorySlug && currentProduct.categorySlug && p.categorySlug === currentProduct.categorySlug) return 4;
+          return 5;
+        };
+        return getPriority(a) - getPriority(b);
+      });
       
-      if (seriesProducts.length > 0) {
-        setRelatedProducts(seriesProducts.slice(0, 8));
-      } else {
-        // If no series products, try same category or subcategory
-        const categoryProducts = products.filter(p => 
-          (p.categorySlug && currentProduct.categorySlug && p.categorySlug === currentProduct.categorySlug) ||
-          (p.subCategorySlug && currentProduct.subCategorySlug && p.subCategorySlug === currentProduct.subCategorySlug)
-        );
-        setRelatedProducts(categoryProducts.slice(0, 8));
-      }
+      setRelatedProducts(sortedProducts.slice(0, 8));
     } catch (error) {
       console.error('Fetch related products error:', error);
     }
@@ -139,25 +224,39 @@ const ProductDetails = () => {
   };
 
   const handleAction = async (action) => {
-    if (action === 'cart' && (product.status === 'passive' || product.status === 'out_of_stock')) {
-      toast.error('Bu məhsul artıq mövcud deyil');
+    if (action === 'cart' && isOutOfStock) {
+      showError('Bu məhsul artıq mövcud deyil');
       return;
     }
     
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.info('Bu əməliyyat üçün daxil olmalısınız.');
+      showInfo('Bu əməliyyat üçün daxil olmalısınız.');
       navigate('/login');
       return;
     }
 
     try {
       if (action === 'cart') {
+        setIsAddingToCart(true);
         await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
-          { productId: id, quantity: 1 },
+          { 
+            productId: id, 
+            quantity: 1,
+            variantSku: selectedVariant?.sku,
+            variantName: selectedVariant?.name
+          },
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        toast.success('Məhsul səbətə əlavə edildi!');
+        
+        // Show success icon and refetch cart
+        setShowSuccessIcon(true);
+        fetchCart();
+        
+        // Hide success icon after 1 second
+        setTimeout(() => {
+          setShowSuccessIcon(false);
+        }, 1000);
       } else if (action === 'favorite') {
         const response = await axios.post('http://127.0.0.1:5000/api/users/favorites/toggle', 
           { productId: id },
@@ -165,12 +264,16 @@ const ProductDetails = () => {
         );
         const liked = response.data.favorites.includes(id.toString());
         setIsFavorite(liked);
-        toast.success(liked ? 'Seçilmişlərə əlavə edildi' : 'Seçilmişlərdən silindi');
+        showSuccess(liked ? 'Seçilmişlərə əlavə edildi' : 'Seçilmişlərdən silindi');
       }
     } catch (error) {
       console.error('Cart add error:', error.response?.data || error.message);
       const errorMsg = error.response?.data?.error || 'Xəta baş verdi';
-      toast.error(errorMsg);
+      showError(errorMsg);
+    } finally {
+      if (action === 'cart') {
+        setIsAddingToCart(false);
+      }
     }
   };
 
@@ -211,14 +314,14 @@ const ProductDetails = () => {
         </nav>
 
         {/* Main Content - 3 Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[90px_1fr_420px] gap-8 lg:gap-8 items-start max-w-[1400px] mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-[90px_560px_1fr] gap-[32px] items-start max-w-[1400px] mx-auto">
           {/* Left Column: Thumbnail Gallery */}
-          <div className="order-2 lg:order-1 flex lg:flex-col gap-3 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-            {images.map((img, idx) => (
+          <div className="order-2 lg:order-1 flex lg:flex-col gap-[12px] overflow-x-auto lg:overflow-y-auto lg:max-h-[520px] pb-2 lg:pb-0">
+            {currentImages.map((img, idx) => (
               <button
                 key={idx}
                 onClick={() => setActiveImage(idx)}
-                className={`flex-shrink-0 w-[80px] h-[80px] rounded-[10px] border-2 transition-all overflow-hidden bg-gray-50 hover:border-pink-300 ${
+                className={`flex-shrink-0 w-[78px] h-[78px] rounded-[10px] border-2 transition-all overflow-hidden bg-gray-50 hover:border-pink-300 ${
                   activeImage === idx ? 'border-pink-600' : 'border-gray-200'
                 }`}
               >
@@ -228,49 +331,116 @@ const ProductDetails = () => {
           </div>
 
           {/* Center Column: Main Image */}
-          <div className="order-1 lg:order-2">
-            <div className="flex items-center justify-center" style={{ minHeight: '620px' }}>
-              <img
-                src={images[activeImage]}
-                alt={product.name}
-                className="object-contain max-h-[620px] w-full select-none"
-                draggable={false}
-              />
-            </div>
+          <div className="order-1 lg:order-2 w-full overflow-hidden product-main-image-container" style={{ height: '380px', maxHeight: '380px' }}>
+            <img
+              src={currentImages[activeImage]}
+              alt={product.name}
+              className="product-main-image w-full h-full object-contain object-center select-none"
+              style={{ width: '100%', height: '380px', objectFit: 'contain', objectPosition: 'center' }}
+              draggable={false}
+            />
           </div>
+
+          {/* Desktop Styles */}
+          <style>{`
+            @media (min-width: 1024px) {
+              .product-main-image-container {
+                width: 520px !important;
+                height: 520px !important;
+                max-height: 520px !important;
+              }
+              .product-main-image-container img {
+                width: 520px !important;
+                height: 520px !important;
+              }
+            }
+          `}</style>
 
           {/* Right Column: Product Info */}
           <div className="order-3 space-y-6">
             {/* Product Title */}
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 leading-snug mb-2">{product.name}</h1>
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 leading-snug mb-2">
+                {selectedVariant ? `${getBaseProductName()}, tonu "${getCleanVariantName(selectedVariant)}"` : getBaseProductName()}
+              </h1>
             </div>
 
             {/* Product Meta Info */}
-            <div className="space-y-3 text-sm">
-              {(product.seriesName || product.collection) && (
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 font-medium w-20">Seriya:</span>
-                  <span className="text-gray-900 font-semibold">{product.seriesName || product.collection}</span>
+      <div className="space-y-3 text-sm">
+        {(product.seriesName || product.collection) && (
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 font-medium w-20">Seriya:</span>
+            <Link 
+              to={`/products?series=${product.seriesSlug || ''}`} 
+              className="text-pink-600 hover:text-pink-700 font-semibold transition-colors"
+            >
+              {product.seriesName || product.collection}
+            </Link>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500 font-medium w-20">Artikul:</span>
+          <span className="text-gray-900 font-mono">{currentSku}</span>
+        </div>
+        {selectedVariant && (
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 font-medium w-20">Variant:</span>
+            <span className="text-gray-900 font-semibold">{getCleanVariantName(selectedVariant)}</span>
+          </div>
+        )}
+        {(selectedVariant?.weight?.value || product.weight?.value) && (
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 font-medium w-20">Çəki:</span>
+            <span className="text-gray-900">{(selectedVariant?.weight?.value || product.weight?.value)} {(selectedVariant?.weight?.unit || product.weight?.unit)}</span>
+          </div>
+        )}
+        {(selectedVariant?.volume?.value || product.volume?.value) && (
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 font-medium w-20">Həcm:</span>
+            <span className="text-gray-900">{(selectedVariant?.volume?.value || product.volume?.value)} {(selectedVariant?.volume?.unit || product.volume?.unit)}</span>
+          </div>
+        )}
+      </div>
+
+            {/* Variants Selector */}
+            {product.variants && product.variants.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-900">Çalar seçin</h3>
+                <div className="flex flex-wrap gap-2">
+                  {product.variants.map((variant, idx) => {
+                    const isActive = variant.status === 'active' && variant.stock > 0;
+                    const isSelected = selectedVariant?.sku === variant.sku;
+                    return (
+                      <button
+                        key={variant.sku || idx}
+                        onClick={() => {
+                          setSelectedVariant(variant);
+                          setActiveImage(0);
+                        }}
+                        disabled={!isActive}
+                        className={`
+                          relative flex items-center justify-center
+                          w-14 h-14 rounded-xl border-2 transition-all
+                          ${isSelected ? 'border-pink-600 ring-2 ring-pink-200' : 'border-gray-200'}
+                          ${!isActive ? 'opacity-40 cursor-not-allowed' : 'hover:border-pink-300 cursor-pointer'}
+                        `}
+                      >
+                        {variant.variantImage || variant.image ? (
+                          <img src={variant.variantImage || variant.image} alt={getCleanVariantName(variant)} className="w-full h-full object-contain p-1 rounded-xl" />
+                        ) : (
+                          <span className="text-xs font-medium text-gray-600">{getCleanVariantName(variant).slice(0, 3)}</span>
+                        )}
+                        {!isActive && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-200/60 rounded-xl">
+                            <span className="text-[10px] text-gray-500 font-bold">Tükəndib</span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-              <div className="flex items-center gap-2">
-                <span className="text-gray-500 font-medium w-20">Artikul:</span>
-                <span className="text-gray-900 font-mono">{product.sku}</span>
               </div>
-              {product.weight?.value && (
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 font-medium w-20">Çəki:</span>
-                  <span className="text-gray-900">{product.weight.value} {product.weight.unit}</span>
-                </div>
-              )}
-              {product.volume?.value && (
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 font-medium w-20">Həcm:</span>
-                  <span className="text-gray-900">{product.volume.value} {product.volume.unit}</span>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Short Description Preview */}
             {product.description && (
@@ -302,7 +472,7 @@ const ProductDetails = () => {
 
               {/* Add to Cart & Favorite */}
               <div className="flex gap-3">
-                {product.status === 'out_of_stock' ? (
+                {isOutOfStock ? (
                   <button 
                     disabled
                     className="flex-1 py-4 bg-gray-200 text-gray-500 font-bold rounded-xl cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm"
@@ -313,10 +483,18 @@ const ProductDetails = () => {
                 ) : (
                   <button 
                     onClick={() => handleAction('cart')}
+                    disabled={isAddingToCart}
                     className="flex-1 py-4 bg-[#0F52BA] text-white font-bold rounded-xl hover:bg-[#0A3D8A] transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <ShoppingCart size={20} />
-                    Səbətə
+                    {isAddingToCart ? (
+                      <Loader size={20} className="animate-spin" />
+                    ) : showSuccessIcon ? (
+                      <Check size={20} />
+                    ) : isProductInCart(id, selectedVariant?.sku) ? (
+                      <><Plus size={20} /> Daha çox əlavə et</>
+                    ) : (
+                      <><ShoppingCart size={20} /> Səbətə</>
+                    )}
                   </button>
                 )}
                 <button 
@@ -334,21 +512,21 @@ const ProductDetails = () => {
               {/* Product Trust Indicators */}
               <div className="mt-6 flex flex-wrap gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
-                  {product.status === 'active' ? (
+                  {!isOutOfStock ? (
                     <>
                       <div className="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center">
                         <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
                       </div>
                       <span>Stokda var</span>
                     </>
-                  ) : product.status === 'out_of_stock' ? (
+                  ) : (
                     <>
                       <div className="w-5 h-5 rounded-full bg-orange-50 flex items-center justify-center">
                         <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
                       </div>
                       <span>Stokda yoxdur</span>
                     </>
-                  ) : null}
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center">
@@ -392,7 +570,7 @@ const ProductDetails = () => {
               <div className="max-w-3xl">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <div className="md:col-span-2">
-                    <ExpandableText text={product.description} maxHeight={220} />
+                    <ExpandableText text={(selectedVariant?.description?.trim() ? selectedVariant.description : product.description)} maxHeight={220} />
                   </div>
                   
                   {/* Product Specifications */}
@@ -412,19 +590,24 @@ const ProductDetails = () => {
                       {(product.seriesName || product.collection) && (
                         <div className="flex justify-between">
                           <span className="text-gray-500">Seriya</span>
-                          <span className="text-gray-900 font-medium">{product.seriesName || product.collection}</span>
+                          <Link 
+                            to={`/products?series=${product.seriesSlug || ''}`} 
+                            className="text-pink-600 hover:text-pink-700 font-medium transition-colors"
+                          >
+                            {product.seriesName || product.collection}
+                          </Link>
                         </div>
                       )}
-                      {product.weight?.value && (
+                      {(selectedVariant?.weight?.value || product.weight?.value) && (
                         <div className="flex justify-between">
                           <span className="text-gray-500">Çəki</span>
-                          <span className="text-gray-900 font-medium">{product.weight.value} {product.weight.unit}</span>
+                          <span className="text-gray-900 font-medium">{(selectedVariant?.weight?.value || product.weight?.value)} {(selectedVariant?.weight?.unit || product.weight?.unit)}</span>
                         </div>
                       )}
-                      {product.volume?.value && (
+                      {(selectedVariant?.volume?.value || product.volume?.value) && (
                         <div className="flex justify-between">
                           <span className="text-gray-500">Həcm</span>
-                          <span className="text-gray-900 font-medium">{product.volume.value} {product.volume.unit}</span>
+                          <span className="text-gray-900 font-medium">{(selectedVariant?.volume?.value || product.volume?.value)} {(selectedVariant?.volume?.unit || product.volume?.unit)}</span>
                         </div>
                       )}
                     </div>
@@ -434,12 +617,12 @@ const ProductDetails = () => {
             )}
             {activeTab === 'ingredients' && (
               <div className="max-w-3xl">
-                <ExpandableText text={product.ingredients} maxHeight={220} />
+                <ExpandableText text={(selectedVariant?.ingredients?.trim() ? selectedVariant.ingredients : product.ingredients)} maxHeight={220} />
               </div>
             )}
             {activeTab === 'usage' && (
               <div className="max-w-3xl">
-                <ExpandableText text={product.usage} maxHeight={220} />
+                <ExpandableText text={(selectedVariant?.usage?.trim() ? selectedVariant.usage : product.usage)} maxHeight={220} />
               </div>
             )}
           </div>

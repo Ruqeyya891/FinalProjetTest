@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShoppingCart, Info, Sparkles, Filter, ChevronRight, Heart, Home, X } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import axios from 'axios';
 import { categories as categoryData } from '../utils/categories';
+import { useNotification } from '../contexts/NotificationContext';
 
 const collections = [
   "24K Pure Gold", "8 Element", "Activity", "Aromania", "Alatau", "Blonde Icon",
@@ -117,11 +117,30 @@ const normalize = (str) =>
 const Products = ({ searchTerm }) => {
   // ALL HOOKS MUST BE AT THE TOP - NO CONDITIONAL BEFORE THEM!
   const navigate = useNavigate();
+  const { showSuccess, showError, showInfo } = useNotification();
   const [searchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState([]);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [series, setSeries] = useState([]);
+  
+  const matchesCategoryPath = (product) => { 
+    if (!mainCategorySlug) return true; 
+ 
+    const matchFromArray = product.categories?.some(cat => 
+      cat.categorySlug === mainCategorySlug && 
+      (!subCategorySlug || cat.subCategorySlug === subCategorySlug) && 
+      (!childCategorySlug || cat.childCategorySlug === childCategorySlug) 
+    ); 
+ 
+    const matchFromOldFields = 
+      product.categorySlug === mainCategorySlug && 
+      (!subCategorySlug || product.subCategorySlug === subCategorySlug) && 
+      (!childCategorySlug || product.childCategorySlug === childCategorySlug); 
+ 
+    return matchFromArray || matchFromOldFields; 
+  };
 
   // Filters state
   const [activeFilters, setActiveFilters] = useState({
@@ -154,6 +173,7 @@ const Products = ({ searchTerm }) => {
   useEffect(() => {
     fetchProducts();
     fetchFavorites();
+    fetchSeries();
   }, [mainCategorySlug, subCategorySlug, childCategorySlug, seriesSlug, searchQuery, activeFilters]);
 
   const fetchProducts = async () => {
@@ -161,11 +181,7 @@ const Products = ({ searchTerm }) => {
       setLoading(true);
       const params = {};
       
-      // Send all present category slugs to the backend to filter together
-      if (mainCategorySlug) params.category = mainCategorySlug;
-      if (subCategorySlug) params.subcategory = subCategorySlug;
-      if (childCategorySlug) params.childCategory = childCategorySlug;
-      
+      // Don't send category params, filter on frontend instead to support both new/old formats
       if (seriesSlug) params.series = seriesSlug;
       if (searchQuery) params.search = searchQuery;
 
@@ -188,9 +204,18 @@ const Products = ({ searchTerm }) => {
       setProducts(response.data);
     } catch (error) {
       console.error('Fetch products error:', error);
-      toast.error('Məhsulları yükləyərkən xəta baş verdi');
+      showError('Məhsulları yükləyərkən xəta baş verdi');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSeries = async () => {
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/api/series');
+      setSeries(response.data);
+    } catch (error) {
+      console.error('Fetch series error:', error);
     }
   };
 
@@ -211,13 +236,13 @@ const Products = ({ searchTerm }) => {
     e.preventDefault();
     
     if (action === 'cart' && (product.status === 'passive' || product.status === 'out_of_stock')) {
-      toast.error('Bu məhsul artıq mövcud deyil');
+      showError('Bu məhsul artıq mövcud deyil');
       return;
     }
 
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.info('Bu əməliyyat üçün daxil olmalısınız.');
+      showInfo('Bu əməliyyat üçün daxil olmalısınız.');
       navigate('/login');
       return;
     }
@@ -231,7 +256,7 @@ const Products = ({ searchTerm }) => {
           { headers: { Authorization: `Bearer ${token}` } }
         );
         console.log('Add to cart response:', response.data);
-        toast.success('Məhsul səbətə əlavə edildi!');
+        showSuccess('Məhsul səbətə əlavə edildi!');
       } else if (action === 'favorite') {
         const response = await axios.post('http://127.0.0.1:5000/api/users/favorites/toggle', 
           { productId: product._id },
@@ -239,7 +264,7 @@ const Products = ({ searchTerm }) => {
         );
         setFavorites(response.data.favorites);
         const isLiked = response.data.favorites.includes(product._id.toString());
-        toast.success(isLiked ? 'Seçilmişlərə əlavə edildi' : 'Seçilmişlərdən silindi');
+        showSuccess(isLiked ? 'Seçilmişlərə əlavə edildi' : 'Seçilmişlərdən silindi');
       } else if (action === 'order') {
         // Redirect to a quick order or cart page
         navigate('/cart');
@@ -247,7 +272,7 @@ const Products = ({ searchTerm }) => {
     } catch (error) {
       console.error(error.response?.data || error.message);
       const errorMsg = error.response?.data?.error || 'Xəta baş verdi';
-      toast.error(errorMsg);
+      showError(errorMsg);
     }
   };
 
@@ -264,29 +289,20 @@ const Products = ({ searchTerm }) => {
       product.artikul?.toString().toLowerCase().includes(q)
     );
 
-    // 2. Category/Subcategory/ChildCategory filter - EXACTLY as user requested
-    const matchCategory = !mainCategorySlug || product.categorySlug === mainCategorySlug;
-    const matchSubCategory = !subCategorySlug || product.subCategorySlug === subCategorySlug;
-    const matchChildCategory = !childCategorySlug || product.childCategorySlug === childCategorySlug;
+    // 2. Series filter
+    const matchSeries = !seriesSlug || product.seriesSlug === seriesSlug;
 
-    // Debug log as requested
-    console.log({
-      categorySlug: mainCategorySlug,
-      subCategorySlug: subCategorySlug,
-      childCategorySlug: childCategorySlug,
-      products: products.map(p => ({ 
-        name: p.name, 
-        categorySlug: p.categorySlug, 
-        subCategorySlug: p.subCategorySlug, 
-        childCategorySlug: p.childCategorySlug 
-      })),
-      filteredProducts: products.filter(p => (!mainCategorySlug || p.categorySlug === mainCategorySlug) && (!subCategorySlug || p.subCategorySlug === subCategorySlug) && (!childCategorySlug || p.childCategorySlug === childCategorySlug)).map(p => p.name)
-    });
+    // 3. Category/Subcategory/ChildCategory filter using matchesCategoryPath
+    const matchesCategories = matchesCategoryPath(product);
 
-    return matchesSearch && matchCategory && matchSubCategory && matchChildCategory;
+    // Compute the result first so we can log it
+    return matchesSearch && matchSeries && matchesCategories;
   });
 
   useEffect(() => {
+    console.log("Category filter:", mainCategorySlug);
+    console.log("All products:", products.length);
+    console.log("Filtered products:", filteredProducts.length);
     if (products.length > 0) {
       console.log("--- FILTER DEBUG START ---");
       console.table(products.map(p => ({ 
@@ -295,20 +311,10 @@ const Products = ({ searchTerm }) => {
         categorySlug: p.categorySlug, 
         subCategorySlug: p.subCategorySlug, 
         childCategorySlug: p.childCategorySlug, 
-        category: p.category, 
-        subcategory: p.subcategory || p.subCategory, 
-        childCategory: p.childCategory 
+        categories: p.categories 
       })));
-
-      const shampoo = products.find(p => 
-        p.name?.toLowerCase().includes("şampun") || 
-        p.name?.toLowerCase().includes("sampun") || 
-        p.sku?.toString() === "10319" 
-      );
-      console.log("SHAMPOO PRODUCT FOUND:", shampoo);
       
       console.log("URL SLUGS:", { mainCategorySlug, subCategorySlug, childCategorySlug });
-      console.log("FILTERED COUNT:", filteredProducts.length);
       console.log("--- FILTER DEBUG END ---");
     }
   }, [mainCategorySlug, subCategorySlug, childCategorySlug, products, filteredProducts, searchTerm]);
@@ -553,6 +559,7 @@ const Products = ({ searchTerm }) => {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none text-sm" 
               >
                 <option value="">Hamısını seçmək</option>
+                {series.map(s => <option key={s._id} value={s.name}>{s.name}</option>)}
                 {collections.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
@@ -632,7 +639,13 @@ const Products = ({ searchTerm }) => {
                   >
                     <div className="relative aspect-square overflow-hidden bg-pink-50">
                       <img 
-                        src={product.images?.[0] || product.image} 
+                        src={
+                          product.variants?.[0]?.variantImage ||
+                          product.variants?.[0]?.image ||
+                          product.commonImages?.[0] ||
+                          product.images?.[0] ||
+                          product.image
+                        }
                         alt={product.name} 
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
@@ -771,6 +784,7 @@ const Products = ({ searchTerm }) => {
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none" 
                 >
                   <option value="">Hamısını seçmək</option>
+                  {series.map(s => <option key={s._id} value={s.name}>{s.name}</option>)}
                   {collections.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>

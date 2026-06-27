@@ -1,12 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Bot, LayoutDashboard, Search, BookOpen, LogOut, Menu, X } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
-import { toast } from 'react-toastify';
 import { categories, slugify } from '../utils/categories';
 import axios from 'axios';
+import { useNotification } from '../contexts/NotificationContext';
 
 const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
   const navigate = useNavigate();
+  const { showSuccess } = useNotification();
   const [activeCategory, setActiveCategory] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileCategoryOpen, setMobileCategoryOpen] = useState(null);
@@ -70,7 +71,7 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    toast.success('Çıxış edildi');
+    showSuccess('Çıxış edildi');
     navigate('/login');
     window.dispatchEvent(new Event('storage'));
   };
@@ -170,10 +171,12 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
               </>
             )}
 
-            <Link to="/ai-advisor" className="flex flex-col items-center group">
-              <Bot size={22} className="text-pink-600 animate-pulse" />
-              <span className="text-[9px] xl:text-[10px] mt-1 font-medium text-pink-600">AI</span>
-            </Link>
+            {token && !isAdmin && (
+              <Link to="/ai-advisor" className="flex flex-col items-center group">
+                <Bot size={22} className="text-pink-600" />
+                <span className="text-[9px] xl:text-[10px] mt-1 font-medium text-pink-600">Dəstək</span>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -358,10 +361,12 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
                 <ShoppingCart size={22} className="text-gray-700" />
                 <span className="text-[9px] mt-1">Səbət</span>
               </Link>
-              <Link to="/ai-advisor" onClick={() => setMobileMenuOpen(false)} className="flex flex-col items-center">
-                <Bot size={22} className="text-pink-600 animate-pulse" />
-                <span className="text-[9px] mt-1 text-pink-600">AI</span>
-              </Link>
+              {token && !isAdmin && (
+                <Link to="/ai-advisor" onClick={() => setMobileMenuOpen(false)} className="flex flex-col items-center">
+                  <Bot size={22} className="text-pink-600" />
+                  <span className="text-[9px] mt-1 text-pink-600">Dəstək</span>
+                </Link>
+              )}
             </div>
 
             {/* Mobile Auth/Profile */}

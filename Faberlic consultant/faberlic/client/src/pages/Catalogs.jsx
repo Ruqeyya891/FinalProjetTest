@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useNotification } from '../contexts/NotificationContext';
 
 const Catalogs = () => {
   const [catalogs, setCatalogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { showError } = useNotification();
 
   useEffect(() => {
     const fetchCatalogs = async () => {
@@ -13,14 +14,14 @@ const Catalogs = () => {
         const res = await axios.get('http://127.0.0.1:5000/api/catalogs');
         setCatalogs(res.data);
       } catch (error) {
-        toast.error('Kataloqları yükləyərkən xəta baş verdi.');
+        showError('Kataloqları yükləyərkən xəta baş verdi.');
         console.error('Catalog fetch error:', error);
       } finally {
         setLoading(false);
       }
     };
     fetchCatalogs();
-  }, []);
+  }, [showError]);
 
   if (loading) {
     return (

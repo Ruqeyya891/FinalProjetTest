@@ -26,18 +26,19 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Database Connection
 const connectDB = async () => {
     try {
+        console.log('Trying to connect to MongoDB...');
+        console.log('MONGO_URI:', process.env.MONGO_URI ? 'Set' : 'Not set');
         if (!process.env.MONGO_URI) {
             throw new Error('MONGO_URI is not defined in .env file');
         }
         await mongoose.connect(process.env.MONGO_URI);
         console.log('MongoDB connection successful');
     } catch (err) {
-        console.error('MongoDB connection error:', err.message);
+        console.error('MongoDB connection error:', err);
         console.log('Zəhmət olmasa MongoDB Atlas-da IP ünvanınızın whitelist-ə əlavə olunduğundan əmin olun.');
+        throw err; // Re-throw to let startServer handle it
     }
 };
-
-connectDB();
 
 // Routes
 app.get('/', (req, res) => {
@@ -53,7 +54,9 @@ const messageRoutes = require('./routes/messageRoutes');
 const catalogRoutes = require('./routes/catalogRoutes');
 const catalogCycleRoutes = require('./routes/catalogCycleRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const seriesRoutes = require('./routes/seriesRoutes');
 
+app.use('/api/series', seriesRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
@@ -73,6 +76,16 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+// Start server only after MongoDB connects
+const startServer = async () => {
+    try {
+        await connectDB();
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+    } catch (err) {
+        console.error('Failed to start server:', err);
+    }
+};
+
+startServer();

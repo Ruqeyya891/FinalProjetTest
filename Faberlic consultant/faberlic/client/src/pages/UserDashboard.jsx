@@ -2,10 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { User as UserIcon, Package, Settings, Heart, Bell, ShoppingBag, LogOut, ChevronRight, Star, Clock, MapPin, Phone, Mail, ArrowRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { toast } from 'react-toastify';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  IconButton,
+  DialogContentText
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import { useNotification } from '../contexts/NotificationContext';
 
 const UserDashboard = () => {
   const navigate = useNavigate();
+  const { showSuccess, showError, showConfirm } = useNotification();
   const [activeTab, setActiveTab] = useState('orders');
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -33,15 +44,18 @@ const UserDashboard = () => {
       setOrders(ordersRes.data.orders);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      toast.error('Məlumatları yükləyərkən xəta baş verdi');
+      showError('Məlumatları yükləyərkən xəta baş verdi');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const confirmed = await showConfirm();
+    if (!confirmed) return;
+    
     localStorage.removeItem('token');
-    toast.success('Çıxış edildi');
+    showSuccess('Çıxış edildi');
     navigate('/login');
     window.dispatchEvent(new Event('storage'));
   };
@@ -66,8 +80,7 @@ const UserDashboard = () => {
                 <div className="w-24 h-24 bg-white text-pink-600 rounded-3xl flex items-center justify-center font-black text-3xl shadow-xl mx-auto mb-6 border-4 border-pink-50">
                   {user.name?.[0]}{user.surname?.[0]}
                 </div>
-                <h2 className="text-2xl font-black text-gray-900 mb-1">{user.name} {user.surname}</h2>
-                <p className="text-pink-600 font-bold text-sm uppercase tracking-widest mb-6">Xanım Consultant</p>
+                <h2 className="text-2xl font-black text-gray-900 mb-6">{user.name} {user.surname}</h2>
                 
                 <div className="space-y-3 pt-6 border-t border-pink-50">
                   {[

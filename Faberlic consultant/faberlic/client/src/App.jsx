@@ -18,6 +18,7 @@ import About from './pages/About';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { jwtDecode } from 'jwt-decode';
+import { NotificationProvider } from './contexts/NotificationContext';
 
 // Protected Route for Admin
 const AdminRoute = ({ children }) => {
@@ -82,35 +83,37 @@ function App() {
   }, []);
 
   return (
-    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <div className="min-h-screen flex flex-col bg-pink-50">
-        <Navbar isAdmin={isAdmin} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<Home searchTerm={searchTerm} />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/products" element={<Products searchTerm={searchTerm} />} />
-            <Route path="/product/:id" element={<ProductDetails />} />
-            <Route path="/dashboard" element={<UserDashboard />} />
-            <Route path="/ai-advisor" element={<AIAdvisor />} />
-            <Route path="/catalogs" element={<Catalogs />} />
-            <Route path="/admin" element={
-              <AdminRoute>
-                <AdminDashboard />
-              </AdminRoute>
-            } />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/cart" element={<Cart />} />
-            <Route path="/favorites" element={<Favorites />} />
-            <Route path="/quick-order" element={<QuickOrder />} />
-            <Route path="/suretli-sifaris" element={<QuickOrder />} />
-          </Routes>
-        </main>
-        <Footer />
-        <ToastContainer position="bottom-right" />
-      </div>
-    </Router>
+    <NotificationProvider>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <div className="min-h-screen flex flex-col bg-pink-50">
+          <Navbar isAdmin={isAdmin} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+          <main className="flex-grow">
+            <Routes>
+              <Route path="/" element={<Home searchTerm={searchTerm} />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/products" element={<Products searchTerm={searchTerm} />} />
+              <Route path="/product/:id" element={<ProductDetails />} />
+              <Route path="/dashboard" element={<UserDashboard />} />
+              <Route path="/ai-advisor" element={<AIAdvisor />} />
+              <Route path="/catalogs" element={<Catalogs />} />
+              <Route path="/admin" element={
+                <AdminRoute>
+                  <AdminDashboard />
+                </AdminRoute>
+              } />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/favorites" element={<Favorites />} />
+              <Route path="/quick-order" element={<QuickOrder />} />
+              <Route path="/suretli-sifaris" element={<QuickOrder />} />
+            </Routes>
+          </main>
+          <Footer />
+          <ToastContainer position="bottom-right" />
+        </div>
+      </Router>
+    </NotificationProvider>
   );
 }
 

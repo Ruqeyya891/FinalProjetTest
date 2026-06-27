@@ -1,5 +1,6 @@
+
 // Helper function to create slugs from Azerbaijani text
-export const slugify = (text) => {
+const slugify = (text) => {
   if (!text) return '';
   const azChars = {
     'ə': 'e', 'ı': 'i', 'ö': 'o', 'ü': 'u', 'ğ': 'g', 'ş': 's', 'ç': 'c',
@@ -14,7 +15,7 @@ export const slugify = (text) => {
     .replace(/(^-|-$)/g, '');
 };
 
-export const categories = [
+const categories = [
   {
     name: 'QULLUQ',
     slug: 'qulluq',
@@ -136,7 +137,7 @@ export const categories = [
   },
   { 
     name: 'PARFÜMERİYA', 
-    slug: 'parfumeriya', 
+    slug: 'parfümeriya', 
     subCategories: [
       { 
         name: 'Qadınlara', 
@@ -166,3 +167,5 @@ export const categories = [
   { name: 'AKSİYALAR', slug: 'aksiyalar', subCategories: [] },
   { name: 'ENDİRİM', slug: 'endirim', subCategories: [] }
 ];
+
+export { categories, slugify };
