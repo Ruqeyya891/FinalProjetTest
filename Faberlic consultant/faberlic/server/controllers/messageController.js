@@ -133,30 +133,6 @@ const adminJoinChat = async (req, res) => {
 };
 
 
-const markMessagesAsRead = async (req, res) =>{ 
-    try { 
-      const { chatId } = req.body; 
-      await Message.updateMany( 
-        { 
-          chatId, 
-          senderType:"user", 
-          isRead:false 
-        }, 
-
-        { 
-          isRead:true 
-        } 
-      ); 
-      res.status(200).json({ 
-        message:"Mesajlar oxundu" 
-      }); 
-    } catch (error) { 
-      res.status(500).json({ 
-        message:error.message 
-      }); 
-    } 
-};
-
 
 const getChatList = async (req, res) => { 
   try { 
@@ -209,8 +185,12 @@ const adminReply = async (req, res) =>{
         senderType:"admin", 
         sender: req.user._id, 
         text, 
-        isRead:true 
+        isRead:false // Changed from true to false, since user hasn't read it yet
       }); 
+      
+      // Update chat last message date
+      await Chat.findOneAndUpdate({ _id: chatId }, { lastMessageDate: new Date() });
+      
       res.status(201).json(message); 
     } catch (error) { 
       res.status(500).json({ 
@@ -218,6 +198,96 @@ const adminReply = async (req, res) =>{
       }); 
     } 
   };
+  
+// New function: get unread count for user
+const getUserUnreadCount = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const chat = await Chat.findOne({ user: userId });
+        if (!chat) {
+            return res.status(200).json({ count: 0 });
+        }
+        
+        const unreadCount = await Message.countDocuments({
+            chatId: chat._id.toString(),
+            senderType: "admin",
+            isRead: false
+        });
+        
+        res.status(200).json({ count: unreadCount });
+    } catch (error) {
+        console.error('Get user unread count error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// New function: mark user's messages as read
+const markUserMessagesAsRead = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const chat = await Chat.findOne({ user: userId });
+        if (!chat) {
+            return res.status(200).json({ message: "Chat tapılmadı" });
+        }
+        
+        await Message.updateMany(
+            {
+                chatId: chat._id.toString(),
+                senderType: "admin",
+                isRead: false
+            },
+            {
+                isRead: true
+            }
+        );
+        
+        res.status(200).json({ message: "Mesajlar oxundu" });
+    } catch (error) {
+        console.error('Mark user messages read error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Update markMessagesAsRead to handle both roles
+const markMessagesAsRead = async (req, res) =>{ 
+    try { 
+      const { chatId } = req.body; 
+      
+      if (req.user.role === "admin") {
+          // Admin: mark user's messages as read
+          await Message.updateMany( 
+            { 
+              chatId, 
+              senderType:"user", 
+              isRead:false 
+            }, 
+            { 
+              isRead:true 
+            } 
+          ); 
+      } else {
+          // User: mark admin's messages as read
+          await Message.updateMany( 
+            { 
+              chatId, 
+              senderType:"admin", 
+              isRead:false 
+            }, 
+            { 
+              isRead:true 
+            } 
+          ); 
+      }
+      
+      res.status(200).json({ 
+        message:"Mesajlar oxundu" 
+      }); 
+    } catch (error) { 
+      res.status(500).json({ 
+        message:error.message 
+      }); 
+    } 
+};
 
 
 // New function: hide chat from admin
@@ -250,5 +320,7 @@ module.exports = {
   adminReply,
   hideChat,
   getChat,
-  getMyChat
+  getMyChat,
+  getUserUnreadCount,
+  markUserMessagesAsRead
 };

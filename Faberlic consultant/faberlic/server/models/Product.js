@@ -122,6 +122,7 @@ const productSchema = new mongoose.Schema(
     collection: { type: String, default: "" }, // Seriya, Kolleksiya
     seriesName: { type: String, default: "" }, // Seriya adı
     seriesSlug: { type: String, default: "" }, // Seriya slug
+    seriesId: { type: mongoose.Schema.Types.ObjectId, ref: "Series", default: null },
     productType: { type: String, default: "" }, // Məhsulun növü
     productEffect: { type: String, default: "" }, // Məhsulun təsiri
     skinType: { type: String, default: "" }, // Dərinin tipi

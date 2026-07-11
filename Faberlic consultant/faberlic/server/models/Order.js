@@ -25,8 +25,7 @@ const OrderSchema = new mongoose.Schema({
     paymentDeadline: { type: Date },
     orderStatus: { type: String, enum: ['pending_payment', 'paid', 'preparing', 'shipped', 'delivered', 'cancelled'], default: 'pending_payment' },
     paymentStatus: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
-    paymentMethod: { type: String, enum: ['card_transfer', 'whatsapp_confirmation'], required: true },
-    contactMethod: { type: String, enum: ['whatsapp', 'instagram'], required: true },
+    paymentMethod: { type: String, enum: ['card_transfer'], required: true, default: 'card_transfer' },
     notes: { type: String }
 }, { timestamps: true });
 
