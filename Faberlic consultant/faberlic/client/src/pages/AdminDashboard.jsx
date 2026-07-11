@@ -30,7 +30,8 @@ import {
   Bot,
   Send,
   LogOut,
-  BookOpen
+  BookOpen,
+  Sparkles
 } from 'lucide-react';
 import {
   Dialog,
@@ -100,6 +101,7 @@ const AdminDashboard = () => {
   const [activeChats, setActiveChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [adminMessage, setAdminMessage] = useState('');
+  const [adminUnreadCount, setAdminUnreadCount] = useState(0);
   const [orders, setOrders] = useState([]);
   const [users, setUsers] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null); // For order details modal
@@ -138,6 +140,18 @@ const AdminDashboard = () => {
   
   // Series State
   const [series, setSeries] = useState([]);
+  const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
+  const [editingSeries, setEditingSeries] = useState(null);
+  const [seriesForm, setSeriesForm] = useState({
+    name: '',
+    slug: '',
+    logo: '',
+    bannerImage: '',
+    description: '',
+    isPopular: false,
+    status: 'active',
+    order: 0
+  });
   
   // Helper function to open product modal with prefilled category
   const openProductModalWithCategory = (mainCat, subCat, childCat) => {
@@ -183,6 +197,7 @@ const AdminDashboard = () => {
       isPromotion: false,
       isHit: false,
       collection: '',
+      seriesId: null,
       seriesName: '',
       seriesSlug: '',
       productType: '',
@@ -384,7 +399,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     if (activeTab === 'chats') fetchActiveChats();
-    if (activeTab === 'products') {
+    if (activeTab === 'products' || activeTab === 'series') {
       fetchProducts();
       fetchSeries();
     }
@@ -394,6 +409,70 @@ const AdminDashboard = () => {
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'overview') fetchStats();
   }, [activeTab]);
+
+  // Poll for new unread messages for admin every 5 seconds
+  useEffect(() => {
+    const pollChats = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://127.0.0.1:5000/api/messages/chat-list', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setActiveChats(response.data);
+        // Calculate total unread count
+        const totalUnread = response.data.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
+        setAdminUnreadCount(totalUnread);
+      } catch (err) {
+        console.error("Error polling chats:", err);
+      }
+    };
+    
+    pollChats();
+    const interval = setInterval(pollChats, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSeriesSubmit = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      
+      let response;
+      if (editingSeries) {
+        response = await axios.put(`http://127.0.0.1:5000/api/series/${editingSeries._id}`, seriesForm, config);
+      } else {
+        response = await axios.post('http://127.0.0.1:5000/api/series', seriesForm, config);
+      }
+      
+      setIsSeriesModalOpen(false);
+      setEditingSeries(null);
+      setSeriesForm({
+        name: '', slug: '', logo: '', bannerImage: '', description: '',
+        isPopular: false, status: 'active', order: 0
+      });
+      fetchSeries();
+      showSuccess('Seriya yadda saxlanıldı');
+    } catch (error) {
+      console.error('Error submitting series:', error.response?.data || error.message);
+      showError(error.response?.data?.error || 'Xəta baş verdi');
+    }
+  };
+
+  const deleteSeries = async (id) => {
+    const confirmed = await showConfirm();
+    if (confirmed) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.delete(`http://127.0.0.1:5000/api/series/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        fetchSeries();
+        showSuccess('Seriya silindi');
+      } catch (error) {
+        showError('Xəta baş verdi');
+      }
+    }
+  };
 
   const fetchCatalogs = async () => {
     try {
@@ -835,7 +914,7 @@ const AdminDashboard = () => {
         sku: '', stock: '', isActive: true,
         status: 'active',
         images: [''], commonImages: [''], isInStock: true, isSuperPrice: false, isNew: false, isDiscount: false,
-        isPromotion: false, isHit: false, collection: '', seriesName: '', seriesSlug: '', productType: '', productEffect: '',
+        isPromotion: false, isHit: false, collection: '', seriesId: null, seriesName: '', seriesSlug: '', productType: '', productEffect: '',
         skinType: '', hairType: '', ingredients: '', usage: '',
         weightValue: '', weightUnit: 'q', volumeValue: '', volumeUnit: 'ml',
         variants: []
@@ -1048,9 +1127,23 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleSelectChat = (chat) => {
+  const handleSelectChat = async (chat) => {
     setSelectedChat({ ...chat, messages: [] });
     loadChatMessages(chat._id);
+    
+    // Mark messages as read
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        "http://127.0.0.1:5000/api/messages/read",
+        { chatId: chat._id },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      // Refresh the chat list to update unread count
+      fetchActiveChats();
+    } catch (err) {
+      console.error("Error marking messages as read:", err);
+    }
   };
 
   const sendMessage = async (e) => {
@@ -1123,7 +1216,7 @@ const AdminDashboard = () => {
     { label: 'Ümumi Gəlir', value: `${statsData.totalRevenue} AZN`, icon: <DollarSign size={24} />, color: 'bg-green-50 text-green-600', trend: '+12%', trendColor: 'text-green-500' },
     { label: 'Ümumi Müştərilər', value: statsData.totalUsers, icon: <Users size={24} />, color: 'bg-pink-50 text-pink-600', trend: '+5%', trendColor: 'text-pink-500' },
     { label: 'Yeni Sifarişlər', value: statsData.newOrders, icon: <Package size={24} />, color: 'bg-purple-50 text-purple-600', trend: '-2%', trendColor: 'text-red-500' },
-    { label: 'Dəstək Mesajları', value: statsData.aiChats, icon: <MessageSquare size={24} />, color: 'bg-pink-50 text-pink-600', trend: '+18%', trendColor: 'text-green-500' },
+    { label: 'Admin ilə Söhbət', value: statsData.aiChats, icon: <MessageSquare size={24} />, color: 'bg-pink-50 text-pink-600', trend: '+18%', trendColor: 'text-green-500' },
   ];
 
   return (
@@ -1159,16 +1252,17 @@ const AdminDashboard = () => {
               { id: 'overview', label: 'Ümumi Baxış', icon: <LayoutGrid size={20} /> },
               { id: 'categories', label: 'Kateqoriyalar', icon: <LayoutDashboard size={20} /> },
               { id: 'products', label: 'Məhsullar', icon: <Package size={20} /> },
+              { id: 'series', label: 'Seriyalar', icon: <Sparkles size={20} /> },
               { id: 'catalogs', label: 'Kataloqlar', icon: <BookOpen size={20} /> },
               { id: 'catalog-cycles', label: 'Kataloq Dövrləri', icon: <Calendar size={20} /> },
               { id: 'orders', label: 'Sifarişlər', icon: <Clock size={20} /> },
               { id: 'users', label: 'Müştərilər', icon: <Users size={20} /> },
-              { id: 'chats', label: 'Dəstək Mesajları', icon: <MessageSquare size={20} /> },
+              { id: 'chats', label: 'Admin ilə Söhbət', icon: <MessageSquare size={20} /> },
             ].map(item => (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold transition-all ${
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold transition-all relative ${
                   activeTab === item.id 
                     ? 'bg-pink-600 text-white shadow-lg shadow-pink-200' 
                     : 'text-gray-500 hover:bg-pink-50 hover:text-pink-600'
@@ -1176,6 +1270,11 @@ const AdminDashboard = () => {
               >
                 {item.icon}
                 {item.label}
+                {item.id === 'chats' && adminUnreadCount > 0 && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                    {adminUnreadCount > 99 ? '99+' : adminUnreadCount}
+                  </span>
+                )}
               </button>
             ))}
             <button
@@ -1203,7 +1302,7 @@ const AdminDashboard = () => {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl transition-all ${
+              className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl transition-all relative ${
                 activeTab === item.id 
                   ? 'text-pink-600' 
                   : 'text-gray-500'
@@ -1211,6 +1310,11 @@ const AdminDashboard = () => {
             >
               {item.icon}
               <span className="text-[10px] font-medium mt-1">{item.label}</span>
+              {item.id === 'chats' && adminUnreadCount > 0 && (
+                <span className="absolute top-1 right-2 bg-red-500 text-white text-[8px] font-bold rounded-full h-3.5 w-3.5 flex items-center justify-center">
+                  {adminUnreadCount > 99 ? '99+' : adminUnreadCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -1244,7 +1348,7 @@ const AdminDashboard = () => {
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm">
-                  <h3 className="text-xl font-bold mb-8">Gəlir Analizi</h3>
+                  <h3 className="text-xl font-bold mb-8 text-gray-900">Gəlir Analizi</h3>
                   {getRevenueChartData() ? (
                     <div className="h-80"><Bar data={getRevenueChartData()} options={{ maintainAspectRatio: false }} /></div>
                   ) : (
@@ -1254,7 +1358,7 @@ const AdminDashboard = () => {
                   )}
                 </div>
                 <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm">
-                  <h3 className="text-xl font-bold mb-8">Ən Çox Satılanlar</h3>
+                  <h3 className="text-xl font-bold mb-8 text-gray-900">Ən Çox Satılanlar</h3>
                   {getBestSellersChartData() ? (
                     <div className="h-80"><Doughnut data={getBestSellersChartData()} options={{ maintainAspectRatio: false }} /></div>
                   ) : (
@@ -1341,7 +1445,7 @@ const AdminDashboard = () => {
                       setSelectedSubCategory(null);
                       setSelectedChildCategory(null);
                     }}
-                    className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-200 transition-all text-left group"
+                    className="bg-white  p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-200 transition-all text-left group"
                   >
                     <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-pink-600 transition-colors">{cat.name}</h3>
                     <p className="text-sm text-gray-500">{cat.subCategories?.length || 0} Alt Kateqoriya</p>
@@ -1360,7 +1464,7 @@ const AdminDashboard = () => {
                       setSelectedSubCategory(subCat);
                       setSelectedChildCategory(null);
                     }}
-                    className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-200 transition-all text-left group"
+                    className="bg-white  p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-200 transition-all text-left group"
                   >
                     <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-pink-600 transition-colors">{subCat.name}</h3>
                     <p className="text-sm text-gray-500">{subCat.childCategories?.length || 0} Alt Kateqoriya</p>
@@ -1381,7 +1485,7 @@ const AdminDashboard = () => {
                         onClick={() => {
                           setSelectedChildCategory(childCat);
                         }}
-                        className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-200 transition-all text-left group"
+                        className="bg-white  p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-200 transition-all text-left group"
                       >
                         <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-pink-600 transition-colors">{childCat.name}</h3>
                       </button>
@@ -1390,7 +1494,7 @@ const AdminDashboard = () => {
                 ) : (
                   // Subcategory page (no children) with add button and product list
                   <div className="space-y-8">
-                    <div className="bg-white p-12 rounded-3xl border border-gray-100 shadow-sm">
+                    <div className="bg-white  p-12 rounded-3xl border border-gray-100 shadow-sm">
                       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8">
                         <h2 className="text-2xl font-bold text-gray-900">{selectedSubCategory.name}</h2>
                         <button
@@ -1404,7 +1508,7 @@ const AdminDashboard = () => {
                     </div>
 
                     {/* Products Table for Subcategory */}
-                    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                    <div className="bg-white  rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
                       <div className="overflow-x-auto">
                         <table className="w-full text-left">
                           <thead className="bg-gray-50 border-b border-gray-100">
@@ -1563,7 +1667,7 @@ const AdminDashboard = () => {
             {/* Child Category Page with Add Button and Products */}
             {selectedMainCategory && selectedSubCategory && selectedChildCategory && (
               <div className="space-y-8">
-                <div className="bg-white p-12 rounded-3xl border border-gray-100 shadow-sm">
+                <div className="bg-white  p-12 rounded-3xl border border-gray-100 shadow-sm">
                   <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8">
                     <h2 className="text-2xl font-bold text-gray-900">{selectedChildCategory.name}</h2>
                     <button
@@ -1577,7 +1681,7 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Products Table for Child Category */}
-                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                <div className="bg-white  rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead className="bg-gray-50 border-b border-gray-100">
@@ -1787,7 +1891,7 @@ const AdminDashboard = () => {
                 </button>
               </div>
             </div>
-            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+            <div className="bg-white  rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-gray-50 border-b border-gray-100">
@@ -1908,6 +2012,7 @@ const AdminDashboard = () => {
                                   isPromotion: product.isPromotion === true,
                                   isHit: product.isHit === true,
                                   collection: product.collection || '',
+                                  seriesId: product.seriesId || null,
                                   seriesName: product.seriesName || '',
                                   seriesSlug: product.seriesSlug || '',
                                   productType: product.productType || '',
@@ -1947,7 +2052,7 @@ const AdminDashboard = () => {
             </div>
             {isProductModalOpen && (
               <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto p-12">
+                <div className="bg-white  rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto p-12">
                   <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-8 gap-4">
                     <div>
                       <h3 className="text-2xl font-bold">{editingProduct ? 'Redaktə Et' : 'Yeni Məhsul'}</h3>
@@ -2053,7 +2158,7 @@ const AdminDashboard = () => {
                                       childCategorySlug: ''
                                     });
                                   }}
-                                  className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                                  className="px-4 py-3 bg-white  rounded-xl outline-none w-full border border-gray-200"
                                 >
                                   <option value="">Əsas Kateqoriya Seçin</option>
                                   {Array.isArray(categoryData) && categoryData.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
@@ -2077,7 +2182,7 @@ const AdminDashboard = () => {
                                       childCategorySlug: ''
                                     });
                                   }}
-                                  className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                                  className="px-4 py-3 bg-white  rounded-xl outline-none w-full border border-gray-200"
                                 >
                                   <option value="">Alt Kateqoriya Seçin</option>
                                   {Array.isArray(categoryData.find(c => c.name === tempCategory.categoryName)?.subCategories) && 
@@ -2110,7 +2215,7 @@ const AdminDashboard = () => {
                                           childCategorySlug: selectedChild ? selectedChild.slug : ''
                                         });
                                       }}
-                                      className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                                      className="px-4 py-3 bg-white  rounded-xl outline-none w-full border border-gray-200"
                                     >
                                       <option value="">Child Kateqoriya Seçin</option>
                                       {Array.isArray(selectedSubCategory?.childCategories) && 
@@ -2414,21 +2519,66 @@ const AdminDashboard = () => {
                     </div>
 
                     {/* Collection, Product Type, Etc. */}
-                    <input 
-                      list="seriesList"
-                      placeholder="Seriya Adı" 
-                      value={productForm.seriesName} 
-                      onChange={e => setProductForm({
-                        ...productForm, 
-                        seriesName: e.target.value
-                      })} 
-                      className="px-6 py-4 bg-gray-50 rounded-2xl outline-none" 
-                    />
-                    <datalist id="seriesList">
-                      {series.map(s => <option key={s._id} value={s.name} />)}
-                      {/* Also include the old collections for backward compatibility */}
-                      {collections.map(c => <option key={c} value={c} />)}
-                    </datalist>
+                    <div className="space-y-1">
+                      <label className="text-sm font-semibold text-gray-700">Seriya</label>
+                      <div className="flex gap-2">
+                        <select 
+                          value={productForm.seriesId || ''}
+                          onChange={(e) => {
+                            const selectedSeries = series.find(s => s._id === e.target.value);
+                            if (selectedSeries) {
+                              setProductForm({
+                                ...productForm,
+                                seriesId: selectedSeries._id,
+                                seriesName: selectedSeries.name,
+                                seriesSlug: selectedSeries.slug
+                              });
+                            } else {
+                              setProductForm({
+                                ...productForm,
+                                seriesId: null,
+                                seriesName: '',
+                                seriesSlug: ''
+                              });
+                            }
+                          }}
+                          className="flex-1 px-6 py-4 bg-gray-50 rounded-2xl outline-none"
+                        >
+                          <option value="">Seriya Seçin</option>
+                          {series.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                        </select>
+                        <span className="text-gray-500 text-sm flex items-center">və ya</span>
+                        <input 
+                          list="seriesList"
+                          placeholder="Yeni Seriya Adı" 
+                          value={productForm.seriesName} 
+                          onChange={(e) => {
+                            const selectedSeries = series.find(s => s.name === e.target.value);
+                            if (selectedSeries) {
+                              setProductForm({
+                                ...productForm,
+                                seriesId: selectedSeries._id,
+                                seriesName: selectedSeries.name,
+                                seriesSlug: selectedSeries.slug
+                              });
+                            } else {
+                              setProductForm({
+                                ...productForm,
+                                seriesId: null,
+                                seriesName: e.target.value,
+                                seriesSlug: e.target.value ? e.target.value.toLowerCase().replace(/\s+/g, '-') : ''
+                              });
+                            }
+                          }} 
+                          className="flex-1 px-6 py-4 bg-gray-50 rounded-2xl outline-none" 
+                        />
+                      </div>
+                      <datalist id="seriesList">
+                        {series.map(s => <option key={s._id} value={s.name} />)}
+                        {/* Also include the old collections for backward compatibility */}
+                        {collections.map(c => <option key={c} value={c} />)}
+                      </datalist>
+                    </div>
                     <select value={productForm.productType} onChange={e => setProductForm({...productForm, productType: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none">
                       <option value="">Məhsul Növü Seçin</option>
                       {productTypes.map(p => <option key={p} value={p}>{p}</option>)}
@@ -2481,7 +2631,7 @@ const AdminDashboard = () => {
                                   placeholder="Variant SKU" 
                                   value={variant.sku}
                                   onChange={e => updateVariant(index, 'sku', e.target.value)}
-                                  className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                  className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                                 />
                               </div>
                               <div className="space-y-1">
@@ -2490,7 +2640,7 @@ const AdminDashboard = () => {
                                   placeholder="Variant adı (rəng, ölçü və s.)" 
                                   value={variant.name}
                                   onChange={e => updateVariant(index, 'name', e.target.value)}
-                                  className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                  className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                                 />
                               </div>
                               <div className="space-y-1">
@@ -2500,7 +2650,7 @@ const AdminDashboard = () => {
                                   placeholder="Stok sayı" 
                                   value={variant.stock}
                                   onChange={e => updateVariant(index, 'stock', e.target.value)}
-                                  className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                  className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                                 />
                               </div>
                             </div>
@@ -2510,7 +2660,7 @@ const AdminDashboard = () => {
                               <select 
                                 value={variant.status}
                                 onChange={e => updateVariant(index, 'status', e.target.value)}
-                                className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                               >
                                 <option value="active">Aktiv</option>
                                 <option value="passive">Passiv</option>
@@ -2524,7 +2674,7 @@ const AdminDashboard = () => {
                                 placeholder="Variantın əsas şəkil linki" 
                                 value={variant.image}
                                 onChange={e => updateVariant(index, 'image', e.target.value)}
-                                className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                               />
                             </div>
 
@@ -2545,7 +2695,7 @@ const AdminDashboard = () => {
                                     placeholder="Şəkil linki" 
                                     value={img}
                                     onChange={e => updateVariantImage(index, imgIndex, e.target.value)}
-                                    className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                    className="flex-1 px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                                   />
                                   <button 
                                     type="button"
@@ -2578,7 +2728,7 @@ const AdminDashboard = () => {
                                       placeholder="Variant üçün xüsusi təsvir (boş buraxılırsa əsas məhsulun təsviri istifadə olunacaq)" 
                                       value={variant.description || ''}
                                       onChange={e => updateVariant(index, 'description', e.target.value)}
-                                      className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                      className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                                       rows="3"
                                     />
                                   </div>
@@ -2590,7 +2740,7 @@ const AdminDashboard = () => {
                                       placeholder="Variant üçün xüsusi tərkib (boş buraxılırsa əsas məhsulun tərkibi istifadə olunacaq)" 
                                       value={variant.ingredients || ''}
                                       onChange={e => updateVariant(index, 'ingredients', e.target.value)}
-                                      className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                      className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                                       rows="3"
                                     />
                                   </div>
@@ -2602,7 +2752,7 @@ const AdminDashboard = () => {
                                       placeholder="Variant üçün xüsusi istifadə qaydası (boş buraxılırsa əsas məhsulun istifadə qaydası istifadə olunacaq)" 
                                       value={variant.usage || ''}
                                       onChange={e => updateVariant(index, 'usage', e.target.value)}
-                                      className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                      className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                                       rows="3"
                                     />
                                   </div>
@@ -2616,12 +2766,12 @@ const AdminDashboard = () => {
                                         placeholder="Çəki dəyəri" 
                                         value={variant.weight?.value || ''}
                                         onChange={e => updateVariant(index, 'weight', { ...variant.weight, value: e.target.value ? parseFloat(e.target.value) : null })}
-                                        className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                        className="flex-1 px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                                       />
                                       <select 
                                         value={variant.weight?.unit || 'q'}
                                         onChange={e => updateVariant(index, 'weight', { ...variant.weight, unit: e.target.value })}
-                                        className="px-4 py-3 bg-white rounded-xl outline-none border border-gray-200 min-w-[80px]"
+                                        className="px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200 min-w-[80px]"
                                       >
                                         <option value="q">q</option>
                                         <option value="kq">kq</option>
@@ -2638,12 +2788,12 @@ const AdminDashboard = () => {
                                         placeholder="Həcm dəyəri" 
                                         value={variant.volume?.value || ''}
                                         onChange={e => updateVariant(index, 'volume', { ...variant.volume, value: e.target.value ? parseFloat(e.target.value) : null })}
-                                        className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                        className="flex-1 px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                                       />
                                       <select 
                                         value={variant.volume?.unit || 'ml'}
                                         onChange={e => updateVariant(index, 'volume', { ...variant.volume, unit: e.target.value })}
-                                        className="px-4 py-3 bg-white rounded-xl outline-none border border-gray-200 min-w-[80px]"
+                                        className="px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200 min-w-[80px]"
                                       >
                                         <option value="ml">ml</option>
                                         <option value="l">l</option>
@@ -2666,6 +2816,112 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {activeTab === 'series' && (
+          <div className="space-y-8">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Seriya İdarəetməsi</h2>
+              <button onClick={() => { 
+                setEditingSeries(null); 
+                setSeriesForm({ name: '', slug: '', logo: '', bannerImage: '', description: '', isPopular: false, status: 'active', order: 0 }); 
+                setIsSeriesModalOpen(true); 
+              }} className="flex items-center gap-2 px-6 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-700 shadow-lg transition-all">
+                <Plus size={20} /> Yeni Seriya
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {series.map(serie => (
+                <div key={serie._id} className="bg-white  rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="relative aspect-[16/9] overflow-hidden bg-gradient-to-r from-pink-100 to-purple-100 from-pink-900/30 to-purple-900/30">
+                    {serie.bannerImage ? (
+                      <img src={serie.bannerImage} alt={serie.name} className="w-full h-full object-cover" />
+                    ) : serie.logo ? (
+                      <div className="flex items-center justify-center h-full">
+                        <img src={serie.logo} alt={serie.name} className="h-24 object-contain" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <Sparkles size={48} className="text-pink-300" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-3">{serie.name}</h3>
+                    <div className="flex items-center gap-2 mb-4 flex-wrap">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${serie.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'}`}>
+                        {serie.status === 'active' ? 'Aktiv' : 'Passiv'}
+                      </span>
+                      {serie.isPopular && (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-600">
+                          Populyar
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setEditingSeries(serie); setSeriesForm(serie); setIsSeriesModalOpen(true); }} className="flex-1 py-2 bg-blue-50 text-blue-600 font-semibold rounded-xl hover:bg-blue-100 transition-all">
+                        <Edit3 size={16} className="inline mr-1" /> Redaktə Et
+                      </button>
+                      <button onClick={() => deleteSeries(serie._id)} className="flex-1 py-2 bg-red-50 text-red-600 font-semibold rounded-xl hover:bg-red-100 transition-all">
+                        <Trash2 size={16} className="inline mr-1" /> Sil
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isSeriesModalOpen && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white  rounded-[40px] w-full max-w-3xl max-h-[90vh] overflow-y-auto p-12">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-8 gap-4">
+                <div>
+                  <h3 className="text-2xl font-bold">{editingSeries ? 'Seriyanı Redaktə Et' : 'Yeni Seriya'}</h3>
+                </div>
+                <button onClick={() => setIsSeriesModalOpen(false)}><X size={24} /></button>
+              </div>
+              <form onSubmit={(e) => { e.preventDefault(); handleSeriesSubmit(); }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700">Seriya Adı *</label>
+                  <input placeholder="Seriya Adı" value={seriesForm.name} onChange={e => setSeriesForm({...seriesForm, name: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700">Slug</label>
+                  <input placeholder="slug" value={seriesForm.slug} onChange={e => setSeriesForm({...seriesForm, slug: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700">Logo Şəkil Linki</label>
+                  <input placeholder="Logo linki" value={seriesForm.logo} onChange={e => setSeriesForm({...seriesForm, logo: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700">Banner Şəkil Linki</label>
+                  <input placeholder="Banner linki" value={seriesForm.bannerImage} onChange={e => setSeriesForm({...seriesForm, bannerImage: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" />
+                </div>
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-sm font-semibold text-gray-700">Təsvir</label>
+                  <textarea placeholder="Seriya haqqında təsvir" value={seriesForm.description} onChange={e => setSeriesForm({...seriesForm, description: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" rows="4" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700">Status</label>
+                  <select value={seriesForm.status} onChange={e => setSeriesForm({...seriesForm, status: e.target.value})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full">
+                    <option value="active">Aktiv</option>
+                    <option value="passive">Passiv</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700">Sıralama</label>
+                  <input type="number" placeholder="Sıra" value={seriesForm.order} onChange={e => setSeriesForm({...seriesForm, order: parseInt(e.target.value) || 0})} className="px-6 py-4 bg-gray-50 rounded-2xl outline-none w-full" />
+                </div>
+                <div className="md:col-span-2 flex items-center gap-3">
+                  <input type="checkbox" id="isPopular" checked={seriesForm.isPopular} onChange={e => setSeriesForm({...seriesForm, isPopular: e.target.checked})} className="w-5 h-5 text-pink-600 rounded focus:ring-pink-500" />
+                  <label htmlFor="isPopular" className="text-sm font-semibold text-gray-700 cursor-pointer">Populyar seriya kimi göstər</label>
+                </div>
+                <button type="submit" className="md:col-span-2 py-5 bg-pink-600 text-white font-bold rounded-2xl shadow-lg hover:bg-pink-700 transition-all">Yadda Saxla</button>
+              </form>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'catalogs' && (
           <div className="space-y-8">
             <div className="flex justify-between items-center">
@@ -2676,7 +2932,7 @@ const AdminDashboard = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {catalogs.map(catalog => (
-                <div key={catalog._id} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                <div key={catalog._id} className="bg-white  rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="relative aspect-[3/4] overflow-hidden">
                     <img src={catalog.image} alt={catalog.name} className="w-full h-full object-cover" />
                   </div>
@@ -2714,7 +2970,7 @@ const AdminDashboard = () => {
                 <Plus size={20} /> Yeni Kataloq Dövrü
               </button>
             </div>
-            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
+            <div className="bg-white  rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-gray-50 border-b border-gray-100">
@@ -2785,7 +3041,7 @@ const AdminDashboard = () => {
         {/* Catalog Cycle Modal */}
         {isCatalogCycleModalOpen && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="bg-white rounded-[40px] w-full max-w-2xl p-12">
+            <div className="bg-white  rounded-[40px] w-full max-w-2xl p-12">
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-900">{editingCatalogCycle ? 'Kataloq Dövrünü Redaktə Et' : 'Yeni Kataloq Dövrü'}</h3>
                 <button onClick={() => setIsCatalogCycleModalOpen(false)}><X size={24} /></button>
@@ -2856,7 +3112,7 @@ const AdminDashboard = () => {
         {/* Catalog Modal */}
         {isCatalogModalOpen && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="bg-white rounded-[40px] w-full max-w-2xl max-h-[90vh] overflow-y-auto p-12">
+            <div className="bg-white  rounded-[40px] w-full max-w-2xl max-h-[90vh] overflow-y-auto p-12">
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-2xl font-bold">{editingCatalog ? 'Kataloqu Redaktə Et' : 'Yeni Kataloq'}</h3>
                 <button onClick={() => setIsCatalogModalOpen(false)}><X size={24} /></button>
@@ -2884,7 +3140,7 @@ const AdminDashboard = () => {
         {activeTab === 'orders' && (
           <div className="space-y-8">
             <h2 className="text-2xl font-bold">Sifarişlər</h2>
-            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
+            <div className="bg-white  rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-gray-50 border-b">
@@ -2912,7 +3168,7 @@ const AdminDashboard = () => {
                         <td className="px-6 py-4 text-sm font-bold text-pink-600">{order.totalAmount} AZN</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{order.catalogNumber || '-'}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">
-                          {order.paymentMethod === 'card_transfer' ? 'Kart köçürməsi' : 'WhatsApp təsdiqi'}
+                          {order.paymentMethod === 'card_transfer' ? 'Kart köçürməsi' : 'Kart köçürməsi'}
                         </td>
                         <td className="px-6 py-4">
                           <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full ${
@@ -2974,7 +3230,7 @@ const AdminDashboard = () => {
         {/* Order Details Modal */}
         {selectedOrder && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="bg-white rounded-[40px] w-full max-w-4xl max-h-[90vh] overflow-y-auto p-8 md:p-12">
+            <div className="bg-white  rounded-[40px] w-full max-w-4xl max-h-[90vh] overflow-y-auto p-8 md:p-12">
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-900">Sifariş Detalları</h3>
                 <button onClick={() => setSelectedOrder(null)}><X size={24} /></button>
@@ -3011,7 +3267,7 @@ const AdminDashboard = () => {
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Ödəniş Metodu</p>
                   <p className="text-lg font-bold text-gray-900">
-                    {selectedOrder.paymentMethod === 'card_transfer' ? 'Kart köçürməsi' : 'WhatsApp təsdiqi'}
+                    {selectedOrder.paymentMethod === 'card_transfer' ? 'Kart köçürməsi' : 'Kart köçürməsi'}
                   </p>
                 </div>
                 <div>
@@ -3133,7 +3389,7 @@ const AdminDashboard = () => {
         {activeTab === 'users' && (
           <div className="space-y-8">
             <h2 className="text-2xl font-bold">Müştərilər</h2>
-            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
+            <div className="bg-white  rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
               <table className="w-full text-left">
                 <thead className="bg-gray-50 border-b">
                   <tr>
@@ -3160,7 +3416,7 @@ const AdminDashboard = () => {
 
         {activeTab === 'chats' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1 bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm flex flex-col h-[600px]">
+            <div className="lg:col-span-1 bg-white  rounded-3xl border border-gray-100 overflow-hidden shadow-sm flex flex-col h-[600px]">
               <div className="p-6 border-b bg-pink-50 font-bold">Aktiv Söhbətlər</div>
               <div className="divide-y overflow-y-auto">
                 {activeChats.map(chat => (
@@ -3193,7 +3449,7 @@ const AdminDashboard = () => {
                 ))}
               </div>
             </div>
-            <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 flex flex-col h-[600px] shadow-sm">
+            <div className="lg:col-span-2 bg-white  rounded-3xl border border-gray-100 flex flex-col h-[600px] shadow-sm">
               {selectedChat ? (
                 <>
                   <div className="p-6 bg-pink-600 text-white rounded-t-3xl flex justify-between items-center">
@@ -3202,7 +3458,7 @@ const AdminDashboard = () => {
                       <p className="text-pink-200 text-xs">{selectedChat.userSnapshot?.email} • {selectedChat.userSnapshot?.phone}</p>
                     </div>
                     <div className="flex gap-2">
-                      {!selectedChat.adminIntervened && <button onClick={() => joinChat(selectedChat._id)} className="px-4 py-2 bg-white text-pink-600 rounded-xl font-bold text-sm">Söhbətə Qoşul</button>}
+                      {!selectedChat.adminIntervened && <button onClick={() => joinChat(selectedChat._id)} className="px-4 py-2 bg-white  text-pink-600 rounded-xl font-bold text-sm">Söhbətə Qoşul</button>}
                       <button 
                         onClick={() => hideChat(selectedChat._id)} 
                         className="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold text-sm"
@@ -3215,7 +3471,7 @@ const AdminDashboard = () => {
                     {selectedChat.messages.map((m, i) => (
                       <div key={m._id || i} className={`flex ${m.senderType === 'user' ? 'justify-start' : 'justify-end'}`}>
                         <div className={`p-4 rounded-2xl max-w-[70%] ${
-                          m.senderType === 'user' ? 'bg-white' : 
+                          m.senderType === 'user' ? 'bg-white ' : 
                           m.senderType === 'admin' ? 'bg-pink-600 text-white' : 
                           'bg-gray-200'
                         }`}>
@@ -3239,7 +3495,7 @@ const AdminDashboard = () => {
       {/* Product Modal */}
       {isProductModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto p-12">
+          <div className="bg-white  rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto p-12">
             <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-8 gap-4">
               <div>
                 <h3 className="text-2xl font-bold">{editingProduct ? 'Redaktə Et' : 'Yeni Məhsul'}</h3>
@@ -3345,7 +3601,7 @@ const AdminDashboard = () => {
                                 childCategorySlug: ''
                               });
                             }}
-                            className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                            className="px-4 py-3 bg-white  rounded-xl outline-none w-full border border-gray-200"
                           >
                             <option value="">Əsas Kateqoriya Seçin</option>
                             {Array.isArray(categoryData) && categoryData.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
@@ -3369,7 +3625,7 @@ const AdminDashboard = () => {
                                 childCategorySlug: ''
                               });
                             }}
-                            className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                            className="px-4 py-3 bg-white  rounded-xl outline-none w-full border border-gray-200"
                           >
                             <option value="">Alt Kateqoriya Seçin</option>
                             {Array.isArray(categoryData.find(c => c.name === tempCategory.categoryName)?.subCategories) && 
@@ -3402,7 +3658,7 @@ const AdminDashboard = () => {
                                     childCategorySlug: selectedChild ? selectedChild.slug : ''
                                   });
                                 }}
-                                className="px-4 py-3 bg-white rounded-xl outline-none w-full border border-gray-200"
+                                className="px-4 py-3 bg-white  rounded-xl outline-none w-full border border-gray-200"
                               >
                                 <option value="">Child Kateqoriya Seçin</option>
                                 {Array.isArray(selectedSubCategory?.childCategories) && 
@@ -3860,7 +4116,7 @@ const AdminDashboard = () => {
                           placeholder="Variant SKU" 
                           value={tempVariant.sku}
                           onChange={e => setTempVariant({...tempVariant, sku: e.target.value})}
-                          className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                          className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                         />
                       </div>
                       <div className="space-y-1">
@@ -3869,7 +4125,7 @@ const AdminDashboard = () => {
                           placeholder="Variant adı (rəng, ölçü və s.)" 
                           value={tempVariant.name}
                           onChange={e => setTempVariant({...tempVariant, name: e.target.value})}
-                          className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                          className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                         />
                       </div>
                       <div className="space-y-1">
@@ -3879,7 +4135,7 @@ const AdminDashboard = () => {
                           placeholder="Stok sayı" 
                           value={tempVariant.stock}
                           onChange={e => setTempVariant({...tempVariant, stock: e.target.value})}
-                          className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                          className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                         />
                       </div>
                     </div>
@@ -3889,7 +4145,7 @@ const AdminDashboard = () => {
                       <select 
                         value={tempVariant.status}
                         onChange={e => setTempVariant({...tempVariant, status: e.target.value})}
-                        className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                        className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                       >
                         <option value="active">Aktiv</option>
                         <option value="passive">Passiv</option>
@@ -3903,7 +4159,7 @@ const AdminDashboard = () => {
                         placeholder="Variantın şəkil linki" 
                         value={tempVariant.variantImage}
                         onChange={e => setTempVariant({...tempVariant, variantImage: e.target.value})}
-                        className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                        className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                       />
                     </div>
 
@@ -3980,7 +4236,7 @@ const AdminDashboard = () => {
                               placeholder="Variant üçün xüsusi təsvir (boş buraxılırsa əsas məhsulun təsviri istifadə olunacaq)" 
                               value={tempVariant.description || ''}
                               onChange={e => setTempVariant({...tempVariant, description: e.target.value})}
-                              className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                               rows="3"
                             />
                           </div>
@@ -3992,7 +4248,7 @@ const AdminDashboard = () => {
                               placeholder="Variant üçün xüsusi tərkib (boş buraxılırsa əsas məhsulun tərkibi istifadə olunacaq)" 
                               value={tempVariant.ingredients || ''}
                               onChange={e => setTempVariant({...tempVariant, ingredients: e.target.value})}
-                              className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                               rows="3"
                             />
                           </div>
@@ -4004,7 +4260,7 @@ const AdminDashboard = () => {
                               placeholder="Variant üçün xüsusi istifadə qaydası (boş buraxılırsa əsas məhsulun istifadə qaydası istifadə olunacaq)" 
                               value={tempVariant.usage || ''}
                               onChange={e => setTempVariant({...tempVariant, usage: e.target.value})}
-                              className="w-full px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                              className="w-full px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                               rows="3"
                             />
                           </div>
@@ -4024,7 +4280,7 @@ const AdminDashboard = () => {
                                     value: e.target.value ? parseFloat(e.target.value) : null 
                                   }
                                 })}
-                                className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                className="flex-1 px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                               />
                               <select 
                                 value={tempVariant.weight?.unit || 'q'}
@@ -4035,7 +4291,7 @@ const AdminDashboard = () => {
                                     unit: e.target.value 
                                   }
                                 })}
-                                className="px-4 py-3 bg-white rounded-xl outline-none border border-gray-200 min-w-[80px]"
+                                className="px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200 min-w-[80px]"
                               >
                                 <option value="q">q</option>
                                 <option value="kq">kq</option>
@@ -4058,7 +4314,7 @@ const AdminDashboard = () => {
                                     value: e.target.value ? parseFloat(e.target.value) : null 
                                   }
                                 })}
-                                className="flex-1 px-4 py-3 bg-white rounded-xl outline-none border border-gray-200"
+                                className="flex-1 px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200"
                               />
                               <select 
                                 value={tempVariant.volume?.unit || 'ml'}
@@ -4069,7 +4325,7 @@ const AdminDashboard = () => {
                                     unit: e.target.value 
                                   }
                                 })}
-                                className="px-4 py-3 bg-white rounded-xl outline-none border border-gray-200 min-w-[80px]"
+                                className="px-4 py-3 bg-white  rounded-xl outline-none border border-gray-200 min-w-[80px]"
                               >
                                 <option value="ml">ml</option>
                                 <option value="l">l</option>

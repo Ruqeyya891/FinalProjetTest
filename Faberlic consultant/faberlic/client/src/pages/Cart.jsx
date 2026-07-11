@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Heart, CheckCircle, ExternalLink } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Heart, CheckCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -23,7 +23,7 @@ const Cart = () => {
   const [cartItems, setCartItems] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState('whatsapp_confirmation');
+  const [paymentMethod, setPaymentMethod] = useState('card_transfer');
   const [user, setUser] = useState(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdOrder, setCreatedOrder] = useState(null);
@@ -166,18 +166,6 @@ const Cart = () => {
   const total = subtotal;
   const isBelowMinOrder = total < MIN_ORDER_AMOUNT;
 
-  const generateWhatsAppLink = (order) => {
-    if (!order) return '';
-    const orderNumber = order._id?.slice(-6) || '';
-    const customerName = `${user?.name || ''} ${user?.surname || ''}`.trim();
-    const phone = user?.phone || '';
-    // Filter invalid items in order too for safety
-    const validItems = (order.items || []).filter(item => item.name);
-    const productsList = validItems.map(item => `${item.name} x ${item.quantity} - ${item.total} AZN`).join('%0A');
-    const message = `Sifariş #${orderNumber}%0A%0AAd: ${customerName}%0ATelefon: ${phone}%0A%0AMəhsullar:%0A${productsList}%0A%0ACəmi: ${order.totalAmount} AZN`;
-    return `https://wa.me/?text=${encodeURIComponent(message)}`;
-  };
-
   const handleCheckout = async () => {
     const token = localStorage.getItem('token');
     try {
@@ -188,7 +176,6 @@ const Cart = () => {
           price: item.product?.price_sale || 0
         })),
         totalAmount: total,
-        contactMethod: 'whatsapp',
         paymentMethod
       };
 
@@ -226,11 +213,14 @@ const Cart = () => {
         {validCartItems.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
             <div className="lg:col-span-2 space-y-4">
-              {validCartItems.map((item) => {
+              {validCartItems.map((item, index) => {
+                // Create unique key
+                const uniqueKey = `${item.product?._id || item.productId || item._id}-${item.variantSku || item.variant?.sku || index}`;
+                
                 // If product is null/undefined, show "Məhsul tapılmadı"
                 if (!item.product) {
                   return (
-                    <div key={item._id || item.productId} className="bg-white p-6 rounded-2xl shadow-sm border border-red-100 flex items-center gap-6">
+                    <div key={uniqueKey} className="bg-white p-6 rounded-2xl shadow-sm border border-red-100 flex items-center gap-6">
                       <div className="w-24 h-24 bg-red-50 rounded-xl flex items-center justify-center">
                         <Trash2 className="text-red-400" />
                       </div>
@@ -253,7 +243,7 @@ const Cart = () => {
                 const productName = item.product.name || 'Məhsul';
 
                 return (
-                  <div key={productId} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-6">
+                  <div key={uniqueKey} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-6">
                     <img 
                       src={
                         item.product.variants?.[0]?.variantImage || 
@@ -334,12 +324,12 @@ const Cart = () => {
                       <input 
                         type="radio" 
                         name="paymentMethod" 
-                        value="admin_confirmation" 
+                        value="card_transfer" 
                         checked={true} 
                         disabled
                         className="w-4 h-4 text-pink-600"
                       />
-                      <span className="font-medium text-gray-900">Admin təsdiqi</span>
+                      <span className="font-medium text-gray-900">Kart/köçürmə</span>
                     </label>
                   </div>
                 </div>
@@ -407,19 +397,6 @@ const Cart = () => {
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ flexDirection: 'column', gap: 1, p: 3 }}>
-          {paymentMethod === 'whatsapp_confirmation' && (
-            <Button 
-              href={generateWhatsAppLink(createdOrder)} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              variant="contained"
-              color="success"
-              fullWidth
-              startIcon={<ExternalLink size={20} />}
-            >
-              WhatsApp-a mesaj göndər
-            </Button>
-          )}
           <Button 
             onClick={handleSuccessModalClose} 
             color="inherit"

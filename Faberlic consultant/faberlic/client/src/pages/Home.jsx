@@ -93,6 +93,7 @@ const Home = ({ searchTerm = "" }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [allProducts, setAllProducts] = useState([]);
   const [products, setProducts] = useState([]);
+  const [popularSeries, setPopularSeries] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const navigate = useNavigate();
   const { showSuccess, showError, showInfo } = useNotification();
@@ -122,6 +123,7 @@ const Home = ({ searchTerm = "" }) => {
 
   useEffect(() => {
     fetchProducts();
+    fetchPopularSeries();
     fetchFavorites();
     fetchCart();
   }, []);
@@ -142,6 +144,15 @@ const Home = ({ searchTerm = "" }) => {
       setProducts(shuffledProducts.slice(0, 8));
     } catch (error) {
       console.error('Product fetch error:', error);
+    }
+  };
+
+  const fetchPopularSeries = async () => {
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/api/series/popular');
+      setPopularSeries(response.data);
+    } catch (error) {
+      console.error('Popular series fetch error:', error);
     }
   };
 
@@ -286,7 +297,7 @@ const Home = ({ searchTerm = "" }) => {
 
 
   return (
-    <div className="bg-pink-50 min-h-screen">
+    <div className="bg-pink-50 dark:bg-slate-900 min-h-screen">
       {/* Hero Slider Section */}
       <div className="max-w-[1200px] h-[200px] sm:h-[300px] md:h-[390px] mx-auto my-4 mb-8 relative overflow-hidden rounded-[12px]">
         {/* Slides */}
@@ -298,7 +309,7 @@ const Home = ({ searchTerm = "" }) => {
             <div key={slide.id} className="min-w-full h-full relative">
               {/* Skeleton Loader */}
               {isLoading && (
-                <div className="absolute inset-0 bg-gray-200 animate-pulse"></div>
+                <div className="absolute inset-0 bg-gray-200 dark:bg-slate-700 animate-pulse"></div>
               )}
               
               {/* Slide Image */}
@@ -346,13 +357,13 @@ const Home = ({ searchTerm = "" }) => {
         {/* Navigation Arrows */}
         <button
           onClick={prevSlide}
-          className="absolute top-1/2 left-4 -translate-y-1/2 bg-white text-gray-800 p-2 rounded-full shadow-lg hover:bg-pink-50 transition-all z-10"
+          className="absolute top-1/2 left-4 -translate-y-1/2 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 p-2 rounded-full shadow-lg hover:bg-pink-50 dark:hover:bg-slate-700 transition-all z-10"
         >
           <ChevronLeft size={20} />
         </button>
         <button
           onClick={nextSlide}
-          className="absolute top-1/2 right-4 -translate-y-1/2 bg-white text-gray-800 p-2 rounded-full shadow-lg hover:bg-pink-50 transition-all z-10"
+          className="absolute top-1/2 right-4 -translate-y-1/2 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 p-2 rounded-full shadow-lg hover:bg-pink-50 dark:hover:bg-slate-700 transition-all z-10"
         >
           <ChevronRight size={20} />
         </button>
@@ -374,7 +385,7 @@ const Home = ({ searchTerm = "" }) => {
       {/* Products Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="flex justify-between items-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-900">Məhsullar</h2>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Məhsullar</h2>
           <Link to="/products" className="text-pink-600 font-semibold hover:text-pink-700 flex items-center gap-2">
             Hamısına Bax
             <ArrowRight size={18} />
@@ -387,9 +398,9 @@ const Home = ({ searchTerm = "" }) => {
               <Link 
                 to={`/product/${product._id}`}
                 key={product._id} 
-                className="block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-all group"
+                className="block bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-lg transition-all group"
               >
-                <div className="relative aspect-square overflow-hidden bg-pink-50">
+                <div className="relative aspect-square overflow-hidden bg-pink-50 dark:bg-slate-700">
                   <img 
                     src={
                       product.variants?.[0]?.variantImage ||
@@ -415,7 +426,7 @@ const Home = ({ searchTerm = "" }) => {
                     className={`absolute top-2 right-2 md:top-4 md:right-4 p-1.5 md:p-2 rounded-full shadow-md transition-all ${
                       favorites.includes(product._id.toString()) 
                         ? 'bg-pink-600 text-white' 
-                        : 'bg-white text-gray-400 hover:text-pink-600'
+                        : 'bg-white dark:bg-slate-700 text-gray-400 dark:text-gray-500 hover:text-pink-600'
                     }`}
                   >
                     <Heart 
@@ -429,12 +440,12 @@ const Home = ({ searchTerm = "" }) => {
                   <div className="text-[10px] md:text-xs text-pink-600 font-semibold mb-1 md:mb-2 uppercase tracking-wider">
                     {product.sku}
                   </div>
-                  <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-3 line-clamp-2 group-hover:text-pink-600 transition-colors">{product.name}</h3>
+                  <h3 className="text-sm md:text-lg font-bold text-gray-900 dark:text-gray-100 mb-2 md:mb-3 line-clamp-2 group-hover:text-pink-600 transition-colors">{product.name}</h3>
                   
-                  <div className="flex items-center justify-between pt-2 md:pt-4 border-t border-pink-50">
+                  <div className="flex items-center justify-between pt-2 md:pt-4 border-t border-pink-50 dark:border-slate-700">
                     <div>
                       {product.price_catalog !== product.price_sale && (
-                        <div className="text-gray-400 text-[10px] md:text-xs line-through">{product.price_catalog} AZN</div>
+                        <div className="text-gray-400 dark:text-gray-500 text-[10px] md:text-xs line-through">{product.price_catalog} AZN</div>
                       )}
                       <div className="text-lg md:text-xl font-extrabold text-pink-600">{product.price_sale} AZN</div>
                     </div>
@@ -444,7 +455,7 @@ const Home = ({ searchTerm = "" }) => {
                     {product.status === 'out_of_stock' ? (
                       <button 
                         disabled
-                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-gray-100 text-gray-500 font-bold text-xs md:text-sm rounded-xl cursor-not-allowed transition-all flex items-center gap-1"
+                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 font-bold text-xs md:text-sm rounded-xl cursor-not-allowed transition-all flex items-center gap-1"
                       >
                         Stokda yoxdur
                       </button>
@@ -456,7 +467,7 @@ const Home = ({ searchTerm = "" }) => {
                           addToCart(product);
                         }} 
                         disabled={loadingProductIds.has(product._id)}
-                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-pink-50 text-pink-600 font-bold text-xs md:text-sm rounded-xl hover:bg-pink-600 hover:text-white transition-all flex items-center justify-center gap-1"
+                        className="px-3 md:px-5 py-1.5 md:py-2.5 bg-pink-50 dark:bg-pink-900/30 text-pink-600 font-bold text-xs md:text-sm rounded-xl hover:bg-pink-600 hover:text-white transition-all flex items-center justify-center gap-1"
                       >
                         {loadingProductIds.has(product._id) ? (
                           <Loader size={14} className="animate-spin" />
@@ -470,7 +481,7 @@ const Home = ({ searchTerm = "" }) => {
                       </button>
                     )}
                     <button
-                      className="text-xs md:text-sm text-gray-500 hover:text-pink-600 font-medium transition-colors"
+                      className="text-xs md:text-sm text-gray-500 dark:text-gray-400 hover:text-pink-600 font-medium transition-colors"
                     >
                       Ətraflı
                     </button>
@@ -480,58 +491,59 @@ const Home = ({ searchTerm = "" }) => {
             ))
           ) : (
             <div className="col-span-full py-12 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-pink-100 text-pink-600 mb-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-600 mb-4">
                 <Search size={32} />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Məhsul tapılmadı</h3>
-              <p className="text-gray-500">Axtardığınız meyarlara uyğun məhsul yoxdur.</p>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Məhsul tapılmadı</h3>
+              <p className="text-gray-500 dark:text-gray-400">Axtardığınız meyarlara uyğun məhsul yoxdur.</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Popular Categories Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900">Populyar Kateqoriyalar</h2>
-          <p className="mt-4 text-gray-500 max-w-2xl mx-auto">Axtardığınız məhsulları kateqoriyalar üzrə rahat tapın.</p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-          {categories.map((category) => {
-            const productCount = getProductCount(category.mainCategorySlug, category.subCategorySlug);
-            let toUrl = `/products?category=${category.mainCategorySlug}`;
-            if (category.subCategorySlug) {
-              toUrl += `&subcategory=${category.subCategorySlug}`;
-            }
-            return (
+      {/* Popular Series Section */}
+      {popularSeries.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="flex justify-between items-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Populyar Seriyalar</h2>
+            <Link to="/products" className="text-pink-600 font-semibold hover:text-pink-700 flex items-center gap-2">
+              Hamısına Bax
+              <ArrowRight size={18} />
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+            {popularSeries.map((series) => (
               <Link
-                key={category.id}
-                to={toUrl}
+                key={series._id}
+                to={`/series/${series.slug}`}
                 className="group"
               >
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg transition-all text-center group-hover:border-pink-200">
-                  <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${category.color}`}>
-                    {category.icon}
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-pink-600">{category.name}</h3>
-                  <p className="text-gray-500 text-sm">{productCount} məhsul</p>
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-lg transition-all text-center group-hover:border-pink-200 dark:group-hover:border-pink-800">
+                  {series.logo ? (
+                    <img 
+                      src={series.logo} 
+                      alt={series.name}
+                      className="h-16 object-contain mx-auto mb-4"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-pink-100 dark:bg-pink-900/30 mx-auto mb-4 flex items-center justify-center text-pink-600">
+                      <Sparkles size={32} />
+                    </div>
+                  )}
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-pink-600">{series.name}</h3>
                 </div>
               </Link>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* CTA Section */}
       <div className="bg-pink-600 py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-white mb-8">İndi Hərəkətə Keçin!</h2>
           <div className="flex flex-wrap justify-center gap-6">
-            <a href="https://wa.me/994519848659" target="_blank" className="px-8 py-4 bg-white text-pink-600 font-bold rounded-xl hover:bg-pink-50 transition-all shadow-xl flex items-center gap-2">
-              <MessageCircle size="24" className="text-green-600" />
-              WhatsApp ilə Yazın
-            </a>
             <Link to="/register" className="px-8 py-4 bg-pink-800 text-white font-bold rounded-xl hover:bg-pink-900 transition-all shadow-xl flex items-center gap-2">
               Qeydiyyatdan Keçin
               <ArrowRight size={20} />

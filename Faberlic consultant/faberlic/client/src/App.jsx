@@ -15,10 +15,13 @@ import Footer from './components/Footer';
 import Catalogs from './pages/Catalogs';
 import QuickOrder from './pages/QuickOrder';
 import About from './pages/About';
+import SeriesDetail from './pages/SeriesDetail';
+import ScrollToTop from './components/ScrollToTop';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { jwtDecode } from 'jwt-decode';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 // Protected Route for Admin
 const AdminRoute = ({ children }) => {
@@ -83,37 +86,41 @@ function App() {
   }, []);
 
   return (
-    <NotificationProvider>
-      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <div className="min-h-screen flex flex-col bg-pink-50">
-          <Navbar isAdmin={isAdmin} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-          <main className="flex-grow">
-            <Routes>
-              <Route path="/" element={<Home searchTerm={searchTerm} />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/products" element={<Products searchTerm={searchTerm} />} />
-              <Route path="/product/:id" element={<ProductDetails />} />
-              <Route path="/dashboard" element={<UserDashboard />} />
-              <Route path="/ai-advisor" element={<AIAdvisor />} />
-              <Route path="/catalogs" element={<Catalogs />} />
-              <Route path="/admin" element={
-                <AdminRoute>
-                  <AdminDashboard />
-                </AdminRoute>
-              } />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/cart" element={<Cart />} />
-              <Route path="/favorites" element={<Favorites />} />
-              <Route path="/quick-order" element={<QuickOrder />} />
-              <Route path="/suretli-sifaris" element={<QuickOrder />} />
-            </Routes>
-          </main>
-          <Footer />
-          <ToastContainer position="bottom-right" />
-        </div>
-      </Router>
-    </NotificationProvider>
+    <ThemeProvider>
+      <NotificationProvider>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <ScrollToTop />
+          <div className="min-h-screen flex flex-col bg-pink-50 dark:bg-slate-900">
+            <Navbar isAdmin={isAdmin} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+            <main className="flex-grow">
+              <Routes>
+                <Route path="/" element={<Home searchTerm={searchTerm} />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/products" element={<Products searchTerm={searchTerm} />} />
+                <Route path="/product/:id" element={<ProductDetails />} />
+                <Route path="/series/:seriesSlug" element={<SeriesDetail />} />
+                <Route path="/dashboard" element={<UserDashboard />} />
+                <Route path="/ai-advisor" element={<AIAdvisor />} />
+                <Route path="/catalogs" element={<Catalogs />} />
+                <Route path="/admin" element={
+                  <AdminRoute>
+                    <AdminDashboard />
+                  </AdminRoute>
+                } />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/favorites" element={<Favorites />} />
+                <Route path="/quick-order" element={<QuickOrder />} />
+                <Route path="/suretli-sifaris" element={<QuickOrder />} />
+              </Routes>
+            </main>
+            <Footer />
+            <ToastContainer position="bottom-right" />
+          </div>
+        </Router>
+      </NotificationProvider>
+    </ThemeProvider>
   );
 }
 

@@ -20,11 +20,24 @@ const AIAdvisor = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Mark messages as read
+  const markAsRead = async (currentChatId, token) => {
+    try {
+      await axios.put(
+        "http://127.0.0.1:5000/api/messages/user/read",
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (err) {
+      console.error("Error marking messages as read:", err);
+    }
+  };
+
   // Check auth and load chat
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
-      showInfo('Dəstək ilə söhbət etmək üçün daxil olmalısınız.');
+      showInfo('Admin ilə söhbət etmək üçün daxil olmalısınız.');
       navigate('/login');
       return;
     }
@@ -35,8 +48,10 @@ const AIAdvisor = () => {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (response.data) {
-          setChatId(response.data._id.toString());
-          loadExistingMessages(response.data._id.toString(), token);
+          const id = response.data._id.toString();
+          setChatId(id);
+          loadExistingMessages(id, token);
+          markAsRead(id, token); // Mark as read when chat opens
         }
       } catch (error) {
         console.log('No existing chat found');
@@ -64,7 +79,7 @@ const AIAdvisor = () => {
 
     const token = localStorage.getItem('token');
     if (!token) {
-      showInfo('Dəstək ilə söhbət etmək üçün daxil olmalısınız.');
+      showInfo('Admin ilə söhbət etmək üçün daxil olmalısınız.');
       navigate('/login');
       return;
     }
@@ -100,7 +115,7 @@ const AIAdvisor = () => {
               <User size={28} />
             </div>
             <div>
-              <h2 className="text-xl font-bold">Dəstək Xidməti</h2>
+              <h2 className="text-xl font-bold">Admin ilə Söhbət</h2>
               <p className="text-pink-100 text-sm flex items-center gap-1">
                 <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
                 Onlayn
@@ -115,7 +130,7 @@ const AIAdvisor = () => {
             <div className="flex justify-center">
               <div className="flex flex-col items-center gap-3 bg-white p-6 rounded-2xl shadow-sm border border-pink-100 max-w-md">
                 <AlertCircle size={32} className="text-pink-600" />
-                <p className="text-sm text-gray-600 text-center">Salam! Dəstək xidmətinə xoş gəlmisiniz. Sualınızı yazın və biz sizə cavab verəcəyik.</p>
+                <p className="text-sm text-gray-600 text-center">Salam! Admin ilə söhbətə xoş gəlmisiniz. Sualınızı yazın və biz sizə cavab verəcəyik.</p>
               </div>
             </div>
           ) : (

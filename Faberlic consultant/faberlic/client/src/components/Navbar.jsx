@@ -4,17 +4,52 @@ import React, { useState, useEffect, useRef } from 'react';
 import { categories, slugify } from '../utils/categories';
 import axios from 'axios';
 import { useNotification } from '../contexts/NotificationContext';
+// import { useTheme } from '../contexts/ThemeContext';
 
 const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
   const navigate = useNavigate();
   const { showSuccess } = useNotification();
+  // const { isDark, toggleTheme } = useTheme();
   const [activeCategory, setActiveCategory] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileCategoryOpen, setMobileCategoryOpen] = useState(null);
   const [searchResults, setSearchResults] = useState({ series: [], products: [] });
   const [showDropdown, setShowDropdown] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef(null);
   const token = localStorage.getItem('token');
+  
+  // Fetch unread count (for both admin and user)
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      if (!token) return;
+      
+      try {
+        // Check if we're admin or user to use appropriate endpoint
+        if (isAdmin) {
+          // For admin, we'll rely on the AdminDashboard unread count, but let's still fetch
+          const res = await axios.get("http://127.0.0.1:5000/api/messages/chat-list", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const totalUnread = res.data.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
+          setUnreadCount(totalUnread);
+        } else {
+          const res = await axios.get("http://127.0.0.1:5000/api/messages/unread/count", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setUnreadCount(res.data.count);
+        }
+      } catch (err) {
+        console.error("Error fetching unread count:", err);
+      }
+    };
+    
+    fetchUnreadCount();
+    
+    // Poll every 5 seconds
+    const interval = setInterval(fetchUnreadCount, 5000);
+    return () => clearInterval(interval);
+  }, [token, isAdmin]);
 
   // Fetch search results when searchTerm changes
   useEffect(() => {
@@ -133,18 +168,22 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
 
           {/* Desktop Action Icons */}
           <div className="hidden lg:flex items-center space-x-4 xl:space-x-6">
-            <Link to="/catalogs" className="flex flex-col items-center group">
-              <BookOpen size={22} className="text-gray-700 group-hover:text-pink-600" />
-              <span className="text-[9px] xl:text-[10px] mt-1 font-medium">Kataloq</span>
-            </Link>
-            <Link to="/favorites" className="flex flex-col items-center group">
-              <Heart size={22} className="text-gray-700 group-hover:text-pink-600" />
-              <span className="text-[9px] xl:text-[10px] mt-1 font-medium">Seçilmişlər</span>
-            </Link>
-            <Link to="/cart" className="flex flex-col items-center group">
-              <ShoppingCart size={22} className="text-gray-700 group-hover:text-pink-600" />
-              <span className="text-[9px] xl:text-[10px] mt-1 font-medium">Səbət</span>
-            </Link>
+            {!isAdmin && (
+              <>
+                <Link to="/catalogs" className="flex flex-col items-center group">
+                  <BookOpen size={22} className="text-gray-700 group-hover:text-pink-600" />
+                  <span className="text-[9px] xl:text-[10px] mt-1 font-medium">Kataloq</span>
+                </Link>
+                <Link to="/favorites" className="flex flex-col items-center group">
+                  <Heart size={22} className="text-gray-700 group-hover:text-pink-600" />
+                  <span className="text-[9px] xl:text-[10px] mt-1 font-medium">Seçilmişlər</span>
+                </Link>
+                <Link to="/cart" className="flex flex-col items-center group">
+                  <ShoppingCart size={22} className="text-gray-700 group-hover:text-pink-600" />
+                  <span className="text-[9px] xl:text-[10px] mt-1 font-medium">Səbət</span>
+                </Link>
+              </>
+            )}
             
             {!token ? (
               <Link to="/login" className="flex flex-col items-center group">
@@ -171,10 +210,15 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
               </>
             )}
 
-            {token && !isAdmin && (
-              <Link to="/ai-advisor" className="flex flex-col items-center group">
+            {token && (
+              <Link to={isAdmin ? "/admin" : "/ai-advisor"} className="flex flex-col items-center group relative">
                 <Bot size={22} className="text-pink-600" />
-                <span className="text-[9px] xl:text-[10px] mt-1 font-medium text-pink-600">Dəstək</span>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+                <span className="text-[9px] xl:text-[10px] mt-1 font-medium text-pink-600">Admin ilə Söhbət</span>
               </Link>
             )}
           </div>
@@ -189,7 +233,7 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={() => searchTerm && setShowDropdown(true)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-sm py-2 px-4 pr-20 focus:outline-none focus:border-pink-500 transition-colors text-sm"
+              className="w-full bg-gray-50 border border-gray-200 rounded-sm py-2 px-4 pr-20 focus:outline-none focus:border-pink-500 transition-colors text-sm text-gray-900 placeholder-gray-400"
             />
             {searchTerm && (
               <button
@@ -282,92 +326,90 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
         </div>
       </div>
 
-      {/* Categories Bar - Desktop */}
-      <div className="border-t border-gray-100 hidden lg:block">
-        <div className="max-w-7xl mx-auto px-4">
-          <ul className="flex justify-between items-center h-12">
-            <li className="relative h-full flex items-center">
-              <Link
-                to="/products"
-                className="text-[10px] xl:text-[11px] font-bold tracking-wider text-pink-600 hover:text-pink-700 h-full flex items-center px-1 xl:px-2 transition-colors"
-              >
-                BÜTÜN MƏHSULLAR
-              </Link>
-            </li>
-            {categories.map((cat) => (
-              <li
-                key={cat.name}
-                className="relative h-full flex items-center group"
-                onMouseEnter={() => setActiveCategory(cat.name)}
-                onMouseLeave={() => setActiveCategory(null)}
-              >
+      {/* Categories Bar - Desktop (only show for non-admin) */}
+      {!isAdmin && (
+        <div className="border-t border-gray-100 hidden lg:block">
+          <div className="max-w-7xl mx-auto px-4">
+            <ul className="flex justify-between items-center h-12">
+              <li className="relative h-full flex items-center">
                 <Link
-                  to={`/products?category=${cat.slug}`}
-                  className="text-[10px] xl:text-[11px] font-bold tracking-wider text-gray-800 hover:text-pink-600 h-full flex items-center px-1 xl:px-2 transition-colors"
+                  to="/products"
+                  className="text-[10px] xl:text-[11px] font-bold tracking-wider text-pink-600 hover:text-pink-700 h-full flex items-center px-1 xl:px-2 transition-colors"
                 >
-                  {cat.name}
+                  BÜTÜN MƏHSULLAR
                 </Link>
-
-                {/* Mega Menu */}
-                {cat.subCategories.length > 0 && activeCategory === cat.name && (
-                  <div className="absolute top-12 left-0 bg-white shadow-xl border-t border-gray-100 w-[700px] xl:w-[800px] p-6 xl:p-8 grid grid-cols-3 xl:grid-cols-4 gap-4 xl:gap-8 z-50">
-                    {cat.subCategories.map((sub) => (
-                      <div key={sub.name}>
-                        <h4 className="font-bold text-sm mb-3 border-b border-gray-100 pb-2">
-                          <Link 
-                            to={`/products?category=${cat.slug}&subcategory=${sub.slug}`}
-                            className="hover:text-pink-600"
-                          >
-                            {sub.name}
-                          </Link>
-                        </h4>
-                        <ul className="space-y-1.5">
-                          {sub.childCategories.map((child) => (
-                            <li key={child.name}>
-                              <Link
-                                to={`/products?category=${cat.slug}&subcategory=${sub.slug}&childCategory=${child.slug}`}
-                                className="text-xs text-gray-600 hover:text-pink-600 transition-colors"
-                              >
-                                {child.name}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </li>
-            ))}
-          </ul>
+              {categories.map((cat) => (
+                <li
+                  key={cat.name}
+                  className="relative h-full flex items-center group"
+                  onMouseEnter={() => setActiveCategory(cat.name)}
+                  onMouseLeave={() => setActiveCategory(null)}
+                >
+                  <Link
+                    to={`/products?category=${cat.slug}`}
+                    className="text-[10px] xl:text-[11px] font-bold tracking-wider text-gray-800 hover:text-pink-600 h-full flex items-center px-1 xl:px-2 transition-colors"
+                  >
+                    {cat.name}
+                  </Link>
+
+                  {/* Mega Menu */}
+                  {cat.subCategories.length > 0 && activeCategory === cat.name && (
+                    <div className="absolute top-12 left-0 bg-white shadow-xl border-t border-gray-100 w-[700px] xl:w-[800px] p-6 xl:p-8 grid grid-cols-3 xl:grid-cols-4 gap-4 xl:gap-8 z-50">
+                      {cat.subCategories.map((sub) => (
+                        <div key={sub.name}>
+                          <h4 className="font-bold text-sm mb-3 border-b border-gray-100 pb-2">
+                            <Link 
+                              to={`/products?category=${cat.slug}&subcategory=${sub.slug}`}
+                              className="hover:text-pink-600 text-gray-900"
+                            >
+                              {sub.name}
+                            </Link>
+                          </h4>
+                          <ul className="space-y-1.5">
+                            {sub.childCategories.map((child) => (
+                              <li key={child.name}>
+                                <Link
+                                  to={`/products?category=${cat.slug}&subcategory=${sub.slug}&childCategory=${child.slug}`}
+                                  className="text-xs text-gray-600 hover:text-pink-600 transition-colors"
+                                >
+                                  {child.name}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="lg:hidden bg-white border-t border-gray-100 max-h-[80vh] overflow-y-auto">
           <div className="p-4 space-y-4">
             {/* Mobile Action Icons */}
-            <div className="grid grid-cols-4 gap-3 pb-4 border-b border-gray-100">
-              <Link to="/catalogs" onClick={() => setMobileMenuOpen(false)} className="flex flex-col items-center">
-                <BookOpen size={22} className="text-gray-700" />
-                <span className="text-[9px] mt-1">Kataloq</span>
-              </Link>
-              <Link to="/favorites" onClick={() => setMobileMenuOpen(false)} className="flex flex-col items-center">
-                <Heart size={22} className="text-gray-700" />
-                <span className="text-[9px] mt-1">Seçilmişlər</span>
-              </Link>
-              <Link to="/cart" onClick={() => setMobileMenuOpen(false)} className="flex flex-col items-center">
-                <ShoppingCart size={22} className="text-gray-700" />
-                <span className="text-[9px] mt-1">Səbət</span>
-              </Link>
-              {token && !isAdmin && (
-                <Link to="/ai-advisor" onClick={() => setMobileMenuOpen(false)} className="flex flex-col items-center">
-                  <Bot size={22} className="text-pink-600" />
-                  <span className="text-[9px] mt-1 text-pink-600">Dəstək</span>
+            {!isAdmin && (
+              <div className="grid grid-cols-3 gap-3 pb-4 border-b border-gray-100">
+                <Link to="/catalogs" onClick={() => setMobileMenuOpen(false)} className="flex flex-col items-center">
+                  <BookOpen size={22} className="text-gray-700" />
+                  <span className="text-[9px] mt-1">Kataloq</span>
                 </Link>
-              )}
-            </div>
+                <Link to="/favorites" onClick={() => setMobileMenuOpen(false)} className="flex flex-col items-center">
+                  <Heart size={22} className="text-gray-700" />
+                  <span className="text-[9px] mt-1">Seçilmişlər</span>
+                </Link>
+                <Link to="/cart" onClick={() => setMobileMenuOpen(false)} className="flex flex-col items-center">
+                  <ShoppingCart size={22} className="text-gray-700" />
+                  <span className="text-[9px] mt-1">Səbət</span>
+                </Link>
+              </div>
+            )}
 
             {/* Mobile Auth/Profile */}
             <div className="pb-4 border-b border-gray-100 space-y-2">
@@ -393,68 +435,70 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
               )}
             </div>
 
-            {/* Mobile Categories */}
-            <div className="space-y-2">
-              <h3 className="font-bold text-gray-900">Kateqoriyalar</h3>
-              <Link 
-                to="/products" 
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-full block py-2 text-left text-sm font-bold text-pink-600"
-              >
-                Bütün Məhsullar
-              </Link>
-              {categories.map((cat) => (
-                <div key={cat.name} className="border-b border-gray-100 pb-2">
-                  <button
-                    onClick={() => {
-                      if (cat.subCategories.length === 0) {
-                        navigate(`/products?category=${cat.slug}`);
-                        setMobileMenuOpen(false);
-                      } else {
-                        setMobileCategoryOpen(mobileCategoryOpen === cat.name ? null : cat.name);
-                      }
-                    }}
-                    className="w-full flex justify-between items-center py-2 text-left text-sm font-semibold text-gray-800"
-                  >
-                    {cat.name}
-                    {cat.subCategories.length > 0 && (
-                      <span className="text-gray-400">{mobileCategoryOpen === cat.name ? '−' : '+'}</span>
+            {/* Mobile Categories (only non-admin) */}
+            {!isAdmin && (
+              <div className="space-y-2">
+                <h3 className="font-bold text-gray-900">Kateqoriyalar</h3>
+                <Link 
+                  to="/products" 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full block py-2 text-left text-sm font-bold text-pink-600"
+                >
+                  Bütün Məhsullar
+                </Link>
+                {categories.map((cat) => (
+                  <div key={cat.name} className="border-b border-gray-100 pb-2">
+                    <button
+                      onClick={() => {
+                        if (cat.subCategories.length === 0) {
+                          navigate(`/products?category=${cat.slug}`);
+                          setMobileMenuOpen(false);
+                        } else {
+                          setMobileCategoryOpen(mobileCategoryOpen === cat.name ? null : cat.name);
+                        }
+                      }}
+                      className="w-full flex justify-between items-center py-2 text-left text-sm font-semibold text-gray-800"
+                    >
+                      {cat.name}
+                      {cat.subCategories.length > 0 && (
+                        <span className="text-gray-400">{mobileCategoryOpen === cat.name ? '−' : '+'}</span>
+                      )}
+                    </button>
+                    
+                    {cat.subCategories.length > 0 && mobileCategoryOpen === cat.name && (
+                      <div className="pl-4 mt-2 space-y-2 pb-2">
+                        {cat.subCategories.map((sub) => (
+                          <div key={sub.name} className="space-y-1">
+                            <Link 
+                              to={`/products?category=${cat.slug}&subcategory=${sub.slug}`}
+                              onClick={() => setMobileMenuOpen(false)}
+                              className="text-xs font-bold text-gray-600 hover:text-pink-600"
+                            >
+                              {sub.name}
+                            </Link>
+                            {sub.childCategories.length > 0 && (
+                              <ul className="pl-3 space-y-1">
+                                {sub.childCategories.map((child) => (
+                                  <li key={child.name}>
+                                    <Link
+                                      to={`/products?category=${cat.slug}&subcategory=${sub.slug}&childCategory=${child.slug}`}
+                                      onClick={() => setMobileMenuOpen(false)}
+                                      className="text-xs text-gray-500 hover:text-pink-600"
+                                    >
+                                      {child.name}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </button>
-                  
-                  {cat.subCategories.length > 0 && mobileCategoryOpen === cat.name && (
-                    <div className="pl-4 mt-2 space-y-2 pb-2">
-                      {cat.subCategories.map((sub) => (
-                        <div key={sub.name} className="space-y-1">
-                          <Link 
-                            to={`/products?category=${cat.slug}&subcategory=${sub.slug}`}
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="text-xs font-bold text-gray-600 hover:text-pink-600"
-                          >
-                            {sub.name}
-                          </Link>
-                          {sub.childCategories.length > 0 && (
-                            <ul className="pl-3 space-y-1">
-                              {sub.childCategories.map((child) => (
-                                <li key={child.name}>
-                                  <Link
-                                    to={`/products?category=${cat.slug}&subcategory=${sub.slug}&childCategory=${child.slug}`}
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className="text-xs text-gray-500 hover:text-pink-600"
-                                  >
-                                    {child.name}
-                                  </Link>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
