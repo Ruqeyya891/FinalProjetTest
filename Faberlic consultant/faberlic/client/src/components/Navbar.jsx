@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Bot, LayoutDashboard, Search, BookOpen, LogOut, Menu, X } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { categories, slugify } from '../utils/categories';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { useNotification } from '../contexts/NotificationContext';
 // import { useTheme } from '../contexts/ThemeContext';
 
@@ -28,13 +28,13 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
         // Check if we're admin or user to use appropriate endpoint
         if (isAdmin) {
           // For admin, we'll rely on the AdminDashboard unread count, but let's still fetch
-          const res = await axios.get("http://127.0.0.1:5000/api/messages/chat-list", {
+          const res = await apiClient.get("/api/messages/chat-list", {
             headers: { Authorization: `Bearer ${token}` }
           });
           const totalUnread = res.data.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
           setUnreadCount(totalUnread);
         } else {
-          const res = await axios.get("http://127.0.0.1:5000/api/messages/unread/count", {
+          const res = await apiClient.get("/api/messages/unread/count", {
             headers: { Authorization: `Bearer ${token}` }
           });
           setUnreadCount(res.data.count);
@@ -61,7 +61,7 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
       }
 
       try {
-        const response = await axios.get('http://127.0.0.1:5000/api/products', {
+        const response = await apiClient.get('/api/products', {
           params: { search: searchTerm }
         });
         const products = response.data;

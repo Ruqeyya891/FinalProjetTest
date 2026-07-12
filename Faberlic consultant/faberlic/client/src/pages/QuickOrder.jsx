@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Search, Info, Heart } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { useNotification } from '../contexts/NotificationContext';
 
 const QuickOrder = () => {
@@ -21,7 +21,7 @@ const QuickOrder = () => {
     const token = localStorage.getItem('token');
     if (token) {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/api/users/cart', {
+        const response = await apiClient.get('/api/users/cart', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setCartItems(response.data.cart);
@@ -33,7 +33,7 @@ const QuickOrder = () => {
 
   const fetchPromoProducts = async () => {
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/products', {
+      const response = await apiClient.get('/api/products', {
         params: { isDiscount: true, isPromotion: true }
       });
       setPromoProducts(response.data);
@@ -55,7 +55,7 @@ const QuickOrder = () => {
 
     try {
       const payload = { productId: product._id || product.id, quantity: 1 };
-      await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
+      await apiClient.post('/api/users/cart/add', 
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );

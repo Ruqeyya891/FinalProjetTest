@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Heart, CheckCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import {
   Dialog,
   DialogTitle,
@@ -40,7 +40,7 @@ const Cart = () => {
 
   const fetchActiveCatalog = async () => {
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/catalog-cycles/active');
+      const response = await apiClient.get('/api/catalog-cycles/active');
       setActiveCatalog(response.data.activeCatalog);
     } catch (error) {
       console.error('Error fetching active catalog:', error);
@@ -51,7 +51,7 @@ const Cart = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/profile', {
+      const response = await apiClient.get('/api/users/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUser(response.data.user);
@@ -67,7 +67,7 @@ const Cart = () => {
       return;
     }
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/cart', {
+      const response = await apiClient.get('/api/users/cart', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCartItems(response.data.cart);
@@ -82,7 +82,7 @@ const Cart = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/favorites', {
+      const response = await apiClient.get('/api/users/favorites', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const favoriteIds = response.data.favorites.map(fav => 
@@ -103,7 +103,7 @@ const Cart = () => {
     }
 
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/users/favorites/toggle', 
+      const response = await apiClient.post('/api/users/favorites/toggle', 
         { productId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -125,7 +125,7 @@ const Cart = () => {
     if (newQuantity < 1) return;
     const token = localStorage.getItem('token');
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/users/cart/update', 
+      const response = await apiClient.post('/api/users/cart/update', 
         { productId, quantity: newQuantity, variantSku },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -142,9 +142,9 @@ const Cart = () => {
     const token = localStorage.getItem('token');
     try {
       const url = variantSku 
-        ? `http://127.0.0.1:5000/api/users/cart/${productId}?variantSku=${encodeURIComponent(variantSku)}`
-        : `http://127.0.0.1:5000/api/users/cart/${productId}`;
-      await axios.delete(url, {
+        ? `/api/users/cart/${productId}?variantSku=${encodeURIComponent(variantSku)}`
+        : `/api/users/cart/${productId}`;
+      await apiClient.delete(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchCart();
@@ -179,7 +179,7 @@ const Cart = () => {
         paymentMethod
       };
 
-      const response = await axios.post('http://127.0.0.1:5000/api/orders', orderData, {
+      const response = await apiClient.post('/api/orders', orderData, {
         headers: { Authorization: `Bearer ${token}` }
       });
 

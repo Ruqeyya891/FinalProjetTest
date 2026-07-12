@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, ArrowLeft, Sparkles, ChevronRight, Loader, Plus, Check } from 'lucide-react';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { useNotification } from '../contexts/NotificationContext';
 
 // Helper function to format price
@@ -146,7 +146,7 @@ const ProductDetails = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/cart', {
+      const response = await apiClient.get('/api/users/cart', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCartItems(response.data.cart);
@@ -163,7 +163,7 @@ const ProductDetails = () => {
 
   const fetchProduct = async () => {
     try {
-      const response = await axios.get(`http://127.0.0.1:5000/api/products/${id}`);
+      const response = await apiClient.get(`/api/products/${id}`);
       const productData = response.data;
       setProduct(productData);
       // Set initial selected variant to first active variant if available
@@ -184,7 +184,7 @@ const ProductDetails = () => {
 
   const fetchRelatedProducts = async (currentProduct) => {
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/products');
+      const response = await apiClient.get('/api/products');
       let products = response.data.filter(p => p._id !== currentProduct._id && p.status !== 'passive');
       
       // Sort products by priority:
@@ -214,7 +214,7 @@ const ProductDetails = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/favorites', {
+      const response = await apiClient.get('/api/users/favorites', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setIsFavorite(response.data.favorites.some(f => (f._id || f).toString() === id));
@@ -239,7 +239,7 @@ const ProductDetails = () => {
     try {
       if (action === 'cart') {
         setIsAddingToCart(true);
-        await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
+        await apiClient.post('/api/users/cart/add', 
           { 
             productId: id, 
             quantity: 1,
@@ -258,7 +258,7 @@ const ProductDetails = () => {
           setShowSuccessIcon(false);
         }, 1000);
       } else if (action === 'favorite') {
-        const response = await axios.post('http://127.0.0.1:5000/api/users/favorites/toggle', 
+        const response = await apiClient.post('/api/users/favorites/toggle', 
           { productId: id },
           { headers: { Authorization: `Bearer ${token}` } }
         );

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, User, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { useNotification } from '../contexts/NotificationContext';
 
 const AIAdvisor = () => {
@@ -23,8 +23,8 @@ const AIAdvisor = () => {
   // Mark messages as read
   const markAsRead = async (currentChatId, token) => {
     try {
-      await axios.put(
-        "http://127.0.0.1:5000/api/messages/user/read",
+      await apiClient.put(
+        "/api/messages/user/read",
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -44,7 +44,7 @@ const AIAdvisor = () => {
 
     const checkExistingChat = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/api/messages/my-chat', {
+        const response = await apiClient.get('/api/messages/my-chat', {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (response.data) {
@@ -62,7 +62,7 @@ const AIAdvisor = () => {
 
   const loadExistingMessages = async (existingChatId, token) => {
     try {
-      const response = await axios.get(`http://127.0.0.1:5000/api/messages/${existingChatId}`, {
+      const response = await apiClient.get(`/api/messages/${existingChatId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data && response.data.length > 0) {
@@ -89,7 +89,7 @@ const AIAdvisor = () => {
     setInputText('');
 
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/messages', {
+      const response = await apiClient.post('/api/messages', {
         chatId: chatId,
         text: inputText
       }, {

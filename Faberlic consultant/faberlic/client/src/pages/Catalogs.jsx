@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { useNotification } from '../contexts/NotificationContext';
 
 const Catalogs = () => {
@@ -11,7 +11,7 @@ const Catalogs = () => {
   useEffect(() => {
     const fetchCatalogs = async () => {
       try {
-        const res = await axios.get('http://127.0.0.1:5000/api/catalogs');
+        const res = await apiClient.get('/api/catalogs');
         setCatalogs(res.data);
       } catch (error) {
         showError('Kataloqları yükləyərkən xəta baş verdi.');

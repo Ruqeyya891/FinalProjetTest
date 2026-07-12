@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User as UserIcon, Package, Settings, Heart, Bell, ShoppingBag, LogOut, ChevronRight, Star, Clock, MapPin, Phone, Mail, ArrowRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import {
   Dialog,
   DialogTitle,
@@ -33,12 +33,12 @@ const UserDashboard = () => {
       return;
     }
     try {
-      const userRes = await axios.get('http://127.0.0.1:5000/api/users/profile', {
+      const userRes = await apiClient.get('/api/users/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUser(userRes.data.user);
 
-      const ordersRes = await axios.get('http://127.0.0.1:5000/api/orders/my-orders', {
+      const ordersRes = await apiClient.get('/api/orders/my-orders', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setOrders(ordersRes.data.orders);

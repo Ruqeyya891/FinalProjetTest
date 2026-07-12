@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShoppingCart, Info, Sparkles, Filter, ChevronRight, Heart, Home, X } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { categories as categoryData } from '../utils/categories';
 import { useNotification } from '../contexts/NotificationContext';
 
@@ -200,7 +200,7 @@ const Products = ({ searchTerm }) => {
       if (activeFilters.minPrice) params.minPrice = activeFilters.minPrice;
       if (activeFilters.maxPrice) params.maxPrice = activeFilters.maxPrice;
 
-      const response = await axios.get('http://127.0.0.1:5000/api/products', { params });
+      const response = await apiClient.get('/api/products', { params });
       setProducts(response.data);
     } catch (error) {
       console.error('Fetch products error:', error);
@@ -212,7 +212,7 @@ const Products = ({ searchTerm }) => {
 
   const fetchSeries = async () => {
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/series');
+      const response = await apiClient.get('/api/series');
       setSeries(response.data);
     } catch (error) {
       console.error('Fetch series error:', error);
@@ -223,7 +223,7 @@ const Products = ({ searchTerm }) => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/favorites', {
+      const response = await apiClient.get('/api/users/favorites', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setFavorites(response.data.favorites.map(f => (f._id || f).toString()));
@@ -251,14 +251,14 @@ const Products = ({ searchTerm }) => {
       if (action === 'cart') {
         const payload = { productId: product._id || product.id, quantity: 1 };
         console.log('Adding to cart (Products):', payload);
-        const response = await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
+        const response = await apiClient.post('/api/users/cart/add', 
           payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         console.log('Add to cart response:', response.data);
         showSuccess('Məhsul səbətə əlavə edildi!');
       } else if (action === 'favorite') {
-        const response = await axios.post('http://127.0.0.1:5000/api/users/favorites/toggle', 
+        const response = await apiClient.post('/api/users/favorites/toggle', 
           { productId: product._id },
           { headers: { Authorization: `Bearer ${token}` } }
         );

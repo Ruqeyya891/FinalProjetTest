@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { Heart, Loader, Plus, Search, Filter, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../contexts/NotificationContext';
@@ -72,7 +72,7 @@ const SeriesDetail = () => {
 
   const fetchSeries = async () => {
     try {
-      const response = await axios.get(`http://127.0.0.1:5000/api/series/${seriesSlug}`);
+      const response = await apiClient.get(`/api/series/${seriesSlug}`);
       setSeries(response.data);
     } catch (error) {
       console.error('Series fetch error:', error);
@@ -84,7 +84,7 @@ const SeriesDetail = () => {
   const fetchProducts = async () => {
     try {
       const params = { series: seriesSlug };
-      const response = await axios.get('http://127.0.0.1:5000/api/products', { params });
+      const response = await apiClient.get('/api/products', { params });
       setProducts(response.data);
     } catch (error) {
       console.error('Products fetch error:', error);
@@ -95,7 +95,7 @@ const SeriesDetail = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/favorites', {
+      const response = await apiClient.get('/api/users/favorites', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const favoriteIds = response.data.favorites.map(fav => 
@@ -115,7 +115,7 @@ const SeriesDetail = () => {
       return;
     }
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/users/favorites/toggle', 
+      const response = await apiClient.post('/api/users/favorites/toggle', 
         { productId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -132,7 +132,7 @@ const SeriesDetail = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/cart', {
+      const response = await apiClient.get('/api/users/cart', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCartItems(response.data.cart);
@@ -169,7 +169,7 @@ const SeriesDetail = () => {
         quantity: 1,
         ...(variantSku && { variantSku })
       };
-      const response = await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
+      const response = await apiClient.post('/api/users/cart/add', 
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );

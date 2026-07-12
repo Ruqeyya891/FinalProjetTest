@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Heart, ShoppingCart, Trash2, ArrowRight, Info, Loader, Plus, Check } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import {
   Dialog,
   DialogTitle,
@@ -38,7 +38,7 @@ const Favorites = () => {
       return;
     }
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/favorites', {
+      const response = await apiClient.get('/api/users/favorites', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setFavorites(response.data.favorites);
@@ -53,7 +53,7 @@ const Favorites = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/cart', {
+      const response = await apiClient.get('/api/users/cart', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCartItems(response.data.cart);
@@ -77,7 +77,7 @@ const Favorites = () => {
     
     const token = localStorage.getItem('token');
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/users/favorites/toggle', 
+      const response = await apiClient.post('/api/users/favorites/toggle', 
         { productId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -101,7 +101,7 @@ const Favorites = () => {
     setLoadingProductIds(prev => new Set(prev).add(productId));
     
     try {
-      await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
+      await apiClient.post('/api/users/cart/add', 
         { productId, quantity: 1 },
         { headers: { Authorization: `Bearer ${token}` } }
       );

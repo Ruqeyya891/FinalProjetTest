@@ -60,7 +60,7 @@ import {
 } from 'chart.js';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../contexts/NotificationContext';
 
@@ -415,7 +415,7 @@ const AdminDashboard = () => {
     const pollChats = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://127.0.0.1:5000/api/messages/chat-list', {
+        const response = await apiClient.get('/api/messages/chat-list', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setActiveChats(response.data);
@@ -439,9 +439,9 @@ const AdminDashboard = () => {
       
       let response;
       if (editingSeries) {
-        response = await axios.put(`http://127.0.0.1:5000/api/series/${editingSeries._id}`, seriesForm, config);
+        response = await apiClient.put(`/api/series/${editingSeries._id}`, seriesForm, config);
       } else {
-        response = await axios.post('http://127.0.0.1:5000/api/series', seriesForm, config);
+        response = await apiClient.post('/api/series', seriesForm, config);
       }
       
       setIsSeriesModalOpen(false);
@@ -463,7 +463,7 @@ const AdminDashboard = () => {
     if (confirmed) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://127.0.0.1:5000/api/series/${id}`, {
+        await apiClient.delete(`/api/series/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         fetchSeries();
@@ -477,7 +477,7 @@ const AdminDashboard = () => {
   const fetchCatalogs = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://127.0.0.1:5000/api/catalogs?isAdmin=true', {
+      const response = await apiClient.get('/api/catalogs?isAdmin=true', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCatalogs(response.data);
@@ -489,7 +489,7 @@ const AdminDashboard = () => {
   const fetchCatalogCycles = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://127.0.0.1:5000/api/catalog-cycles', {
+      const response = await apiClient.get('/api/catalog-cycles', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCatalogCycles(response.data.catalogCycles);
@@ -501,7 +501,7 @@ const AdminDashboard = () => {
   const createCatalogCycle = async (data) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://127.0.0.1:5000/api/catalog-cycles', data, {
+      await apiClient.post('/api/catalog-cycles', data, {
         headers: { Authorization: `Bearer ${token}` }
       });
       showSuccess('Kataloq dövrü yaradıldı!');
@@ -515,7 +515,7 @@ const AdminDashboard = () => {
   const updateCatalogCycle = async (id, data) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`http://127.0.0.1:5000/api/catalog-cycles/${id}`, data, {
+      await apiClient.put(`/api/catalog-cycles/${id}`, data, {
         headers: { Authorization: `Bearer ${token}` }
       });
       showSuccess('Kataloq dövrü yeniləndi!');
@@ -533,21 +533,21 @@ const AdminDashboard = () => {
       const token = localStorage.getItem('token');
       
       // Fetch revenue analytics
-      const revenueRes = await axios.get('http://127.0.0.1:5000/api/admin/analytics/revenue', {
+      const revenueRes = await apiClient.get('/api/admin/analytics/revenue', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setRevenueAnalytics(revenueRes.data);
       console.log("Revenue analytics:", revenueRes.data);
       
       // Fetch best sellers
-      const bestSellersRes = await axios.get('http://127.0.0.1:5000/api/admin/analytics/best-sellers', {
+      const bestSellersRes = await apiClient.get('/api/admin/analytics/best-sellers', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBestSellers(bestSellersRes.data);
       console.log("Best sellers:", bestSellersRes.data);
       
       // Fetch users for totalUsers stat
-      const usersRes = await axios.get('http://127.0.0.1:5000/api/users', {
+      const usersRes = await apiClient.get('/api/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -580,7 +580,7 @@ const AdminDashboard = () => {
   const fetchOrders = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://127.0.0.1:5000/api/orders', {
+      const response = await apiClient.get('/api/orders', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setOrders(response.data.orders);
@@ -592,7 +592,7 @@ const AdminDashboard = () => {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://127.0.0.1:5000/api/users', {
+      const response = await apiClient.get('/api/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUsers(response.data.users);
@@ -604,7 +604,7 @@ const AdminDashboard = () => {
   const updateOrderStatus = async (orderId, orderStatus) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`http://127.0.0.1:5000/api/orders/${orderId}/status`, { orderStatus }, {
+      await apiClient.put(`/api/orders/${orderId}/status`, { orderStatus }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchOrders();
@@ -617,7 +617,7 @@ const AdminDashboard = () => {
   const confirmPayment = async (orderId) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`http://127.0.0.1:5000/api/orders/${orderId}/confirm-payment`, {}, {
+      await apiClient.put(`/api/orders/${orderId}/confirm-payment`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchOrders();
@@ -636,7 +636,7 @@ const AdminDashboard = () => {
 
   const fetchSeries = async () => {
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/series');
+      const response = await apiClient.get('/api/series');
       setSeries(response.data);
     } catch (error) {
       console.error('Error fetching series:', error);
@@ -646,7 +646,7 @@ const AdminDashboard = () => {
   const fetchProducts = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://127.0.0.1:5000/api/products?isAdmin=true', {
+      const response = await apiClient.get('/api/products?isAdmin=true', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProducts(response.data);
@@ -812,7 +812,7 @@ const AdminDashboard = () => {
       
       console.log('🔍 Step 2: FormData file:', formData.get('csvFile')); // Debug log 2
 
-      const response = await axios.post('http://127.0.0.1:5000/api/products/import', formData, {
+      const response = await apiClient.post('/api/products/import', formData, {
         headers: { 
           Authorization: `Bearer ${token}`
           // DO NOT set Content-Type manually! Axios handles this for FormData!
@@ -898,9 +898,9 @@ const AdminDashboard = () => {
       
       let response;
       if (editingProduct) {
-        response = await axios.put(`http://127.0.0.1:5000/api/products/${editingProduct._id}`, productData, config);
+        response = await apiClient.put(`/api/products/${editingProduct._id}`, productData, config);
       } else {
-        response = await axios.post('http://127.0.0.1:5000/api/products', productData, config);
+        response = await apiClient.post('/api/products', productData, config);
       }
       
       console.log('✅ Server Response:', response.data);
@@ -942,7 +942,7 @@ const AdminDashboard = () => {
     console.log("Updating status:", productId, newStatus);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.patch(`http://127.0.0.1:5000/api/products/${productId}/status`, {
+      const response = await apiClient.patch(`/api/products/${productId}/status`, {
         status: newStatus
       }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -969,7 +969,7 @@ const AdminDashboard = () => {
     if (confirmed) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://127.0.0.1:5000/api/products/${id}`, {
+        await apiClient.delete(`/api/products/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         fetchProducts();
@@ -987,9 +987,9 @@ const AdminDashboard = () => {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       
       if (editingCatalog) {
-        await axios.put(`http://127.0.0.1:5000/api/catalogs/${editingCatalog._id}`, catalogForm, config);
+        await apiClient.put(`/api/catalogs/${editingCatalog._id}`, catalogForm, config);
       } else {
-        await axios.post('http://127.0.0.1:5000/api/catalogs', catalogForm, config);
+        await apiClient.post('/api/catalogs', catalogForm, config);
       }
       setIsCatalogModalOpen(false);
       setEditingCatalog(null);
@@ -1008,7 +1008,7 @@ const AdminDashboard = () => {
     if (confirmed) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://127.0.0.1:5000/api/catalogs/${id}`, {
+        await apiClient.delete(`/api/catalogs/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         fetchCatalogs();
@@ -1024,7 +1024,7 @@ const AdminDashboard = () => {
     if (confirmed) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://127.0.0.1:5000/api/catalog-cycles/${id}`, {
+        await apiClient.delete(`/api/catalog-cycles/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         showSuccess('Kataloq dövrü silindi');
@@ -1078,7 +1078,7 @@ const AdminDashboard = () => {
     if (confirmed) {
       try {
         const token = localStorage.getItem('token');
-        await axios.post('http://127.0.0.1:5000/api/messages/hide', { chatId }, {
+        await apiClient.post('/api/messages/hide', { chatId }, {
           headers: { Authorization: `Bearer ${token}` }
         });
         fetchActiveChats();
@@ -1093,7 +1093,7 @@ const AdminDashboard = () => {
   const fetchActiveChats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://127.0.0.1:5000/api/messages/chat-list', {
+      const response = await apiClient.get('/api/messages/chat-list', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setActiveChats(response.data);
@@ -1105,7 +1105,7 @@ const AdminDashboard = () => {
   const joinChat = async (chatId) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://127.0.0.1:5000/api/messages/admin-join', { chatId }, {
+      await apiClient.post('/api/messages/admin-join', { chatId }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchActiveChats();
@@ -1118,7 +1118,7 @@ const AdminDashboard = () => {
   const loadChatMessages = async (chatId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`http://127.0.0.1:5000/api/messages/${chatId}`, {
+      const response = await apiClient.get(`/api/messages/${chatId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSelectedChat({ _id: chatId, messages: response.data, adminIntervened: true });
@@ -1134,8 +1134,8 @@ const AdminDashboard = () => {
     // Mark messages as read
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
-        "http://127.0.0.1:5000/api/messages/read",
+      await apiClient.put(
+        "/api/messages/read",
         { chatId: chat._id },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -1151,7 +1151,7 @@ const AdminDashboard = () => {
     if (!adminMessage.trim() || !selectedChat) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://127.0.0.1:5000/api/messages/admin-reply', {
+      await apiClient.post('/api/messages/admin-reply', {
         chatId: selectedChat._id,
         text: adminMessage
       }, {

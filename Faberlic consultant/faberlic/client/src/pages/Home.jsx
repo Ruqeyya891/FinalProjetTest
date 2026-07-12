@@ -1,7 +1,7 @@
 import { ArrowRight, Bot, ShoppingBag, UserPlus, Sparkles, MessageCircle, ChevronLeft, ChevronRight, Heart, Search, Sparkles as SparklesIcon, Palette, User, Baby, Droplets, Scissors, Star, Loader, Plus, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../contexts/NotificationContext';
 
@@ -134,7 +134,7 @@ const Home = ({ searchTerm = "" }) => {
 
   const fetchProducts = async () => {
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/products');
+      const response = await apiClient.get('/api/products');
       const allProds = response.data;
       setAllProducts(allProds);
       
@@ -149,7 +149,7 @@ const Home = ({ searchTerm = "" }) => {
 
   const fetchPopularSeries = async () => {
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/series/popular');
+      const response = await apiClient.get('/api/series/popular');
       setPopularSeries(response.data);
     } catch (error) {
       console.error('Popular series fetch error:', error);
@@ -178,7 +178,7 @@ const Home = ({ searchTerm = "" }) => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/favorites', {
+      const response = await apiClient.get('/api/users/favorites', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const favoriteIds = response.data.favorites.map(fav => 
@@ -199,7 +199,7 @@ const Home = ({ searchTerm = "" }) => {
     }
 
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/users/favorites/toggle', 
+      const response = await apiClient.post('/api/users/favorites/toggle', 
         { productId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -219,7 +219,7 @@ const Home = ({ searchTerm = "" }) => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/users/cart', {
+      const response = await apiClient.get('/api/users/cart', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCartItems(response.data.cart);
@@ -262,7 +262,7 @@ const Home = ({ searchTerm = "" }) => {
         ...(variantSku && { variantSku })
       };
       console.log('Adding to cart (Home):', payload);
-      const response = await axios.post('http://127.0.0.1:5000/api/users/cart/add', 
+      const response = await apiClient.post('/api/users/cart/add', 
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );

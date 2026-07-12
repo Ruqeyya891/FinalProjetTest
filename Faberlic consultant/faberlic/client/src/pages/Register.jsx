@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, Mail, Phone, Eye, EyeOff, ShieldCheck, Heart, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { useNotification } from '../contexts/NotificationContext';
 
 const Register = () => {
@@ -19,7 +19,7 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/users/register', formData);
+      const response = await apiClient.post('/api/users/register', formData);
       if (response.data.success) {
         setCustomerCode(response.data.user.customerCode);
         setAccessKey(response.data.accessKey);

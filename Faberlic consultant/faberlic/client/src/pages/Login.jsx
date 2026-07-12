@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Key, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/axios';
 import { jwtDecode } from 'jwt-decode';
 import { useNotification } from '../contexts/NotificationContext';
 
@@ -14,7 +14,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/users/login', formData);
+      const response = await apiClient.post('/api/users/login', formData);
       if (response.data.success) {
         localStorage.setItem('token', response.data.token);
         console.log('Login successful. Token saved.');
