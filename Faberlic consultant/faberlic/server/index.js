@@ -22,7 +22,8 @@ if (!fs.existsSync(uploadDir)) {
 // Middleware
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://final-projet-test.vercel.app"
+  "https://final-projet-test.vercel.app",
+  "https://faberlic-shop.vercel.app",
 ];
 
 app.use(cors({
