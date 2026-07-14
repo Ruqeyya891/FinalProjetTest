@@ -11,3 +11,22 @@ body {
   background-color: var(--pink-light);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
+
+/* Custom Swiper Styles */
+.swiper-button-next, .swiper-button-prev {
+  color: #ec4899;
+  background: white;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.swiper-button-next:after, .swiper-button-prev:after {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.swiper-button-next:hover, .swiper-button-prev:hover {
+  background: #fdf2f8;
+}

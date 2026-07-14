@@ -1,4 +1,9 @@
 import { ArrowRight, Bot, ShoppingBag, UserPlus, Sparkles, MessageCircle, ChevronLeft, ChevronRight, Heart, Search, Sparkles as SparklesIcon, Palette, User, Baby, Droplets, Scissors, Star, Loader, Plus, Check } from 'lucide-react';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
+import { Autoplay, Navigation, FreeMode } from 'swiper/modules';
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import apiClient from '../utils/axios';
@@ -512,30 +517,54 @@ const Home = ({ searchTerm = "" }) => {
             </Link>
           </div>
           
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+          <Swiper
+            modules={[Autoplay, Navigation, FreeMode]}
+            spaceBetween={24}
+            slidesPerView={2}
+            grabCursor={true}
+            loop={true}
+            autoplay={{
+              delay: 3000,
+              disableOnInteraction: false,
+              pauseOnMouseEnter: true
+            }}
+            freeMode={true}
+            navigation={true}
+            breakpoints={{
+              640: {
+                slidesPerView: 3
+              },
+              768: {
+                slidesPerView: 4
+              },
+              1024: {
+                slidesPerView: 6
+              }
+            }}
+          >
             {popularSeries.map((series) => (
-              <Link
-                key={series._id}
-                to={`/series/${series.slug}`}
-                className="group"
-              >
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-lg transition-all text-center group-hover:border-pink-200 dark:group-hover:border-pink-800">
-                  {series.logo ? (
-                    <img 
-                      src={series.logo} 
-                      alt={series.name}
-                      className="h-16 object-contain mx-auto mb-4"
-                    />
-                  ) : (
-                    <div className="w-16 h-16 rounded-full bg-pink-100 dark:bg-pink-900/30 mx-auto mb-4 flex items-center justify-center text-pink-600">
-                      <Sparkles size={32} />
-                    </div>
-                  )}
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-pink-600">{series.name}</h3>
-                </div>
-              </Link>
+              <SwiperSlide key={series._id}>
+                <Link
+                  to={`/series/${series.slug}`}
+                  className="group"
+                >
+                  <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-lg transition-all text-center group-hover:border-pink-200 dark:group-hover:border-pink-800 flex items-center justify-center min-h-[140px]">
+                    {series.logo ? (
+                      <img 
+                        src={series.logo} 
+                        alt={series.name}
+                        className="h-16 object-contain"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center text-pink-600">
+                        <Sparkles size={32} />
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              </SwiperSlide>
             ))}
-          </div>
+          </Swiper>
         </div>
       )}
 
