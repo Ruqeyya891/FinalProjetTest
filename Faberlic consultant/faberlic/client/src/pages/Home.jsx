@@ -1,9 +1,10 @@
 import { ArrowRight, Bot, ShoppingBag, UserPlus, Sparkles, MessageCircle, ChevronLeft, ChevronRight, Heart, Search, Sparkles as SparklesIcon, Palette, User, Baby, Droplets, Scissors, Star, Loader, Plus, Check } from 'lucide-react';
+import { Navigation, Pagination, Autoplay, EffectFade, FreeMode } from "swiper/modules";
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
-import { Autoplay, Navigation, FreeMode } from 'swiper/modules';
+import 'swiper/css/effect-fade';
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import apiClient from '../utils/axios';
@@ -94,7 +95,6 @@ const Home = ({ searchTerm = "" }) => {
     }
   ];
 
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [allProducts, setAllProducts] = useState([]);
   const [products, setProducts] = useState([]);
@@ -103,24 +103,6 @@ const Home = ({ searchTerm = "" }) => {
   const navigate = useNavigate();
   const { showSuccess, showError, showInfo } = useNotification();
   const imgRefs = useRef([]);
-
-  // Auto-slide every 3 seconds
-  const nextSlide = useCallback(() => {
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % slides.length);
-  }, [slides.length]);
-
-  const prevSlide = () => {
-    setCurrentIndex((prevIndex) => (prevIndex - 1 + slides.length) % slides.length);
-  };
-
-  const goToSlide = (index) => {
-    setCurrentIndex(index);
-  };
-
-  useEffect(() => {
-    const interval = setInterval(nextSlide, 5000); // Change slide every 5 seconds
-    return () => clearInterval(interval);
-  }, [nextSlide]);
 
   const handleImageLoad = () => {
     setIsLoading(false);
@@ -304,87 +286,77 @@ const Home = ({ searchTerm = "" }) => {
   return (
     <div className="bg-pink-50 dark:bg-slate-900 min-h-screen">
       {/* Hero Slider Section */}
-      <div className="max-w-[1200px] h-[200px] sm:h-[300px] md:h-[390px] mx-auto my-4 mb-8 relative overflow-hidden rounded-[12px]">
-        {/* Slides */}
-        <div 
-          className="flex transition-transform duration-700 ease-out h-full"
-          style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+      <div className="max-w-[1200px] mx-auto my-4 mb-8 relative overflow-hidden rounded-[12px]">
+        <Swiper
+          className="hero-swiper h-[240px] sm:h-[320px] md:h-[390px]"
+          modules={[Autoplay, Navigation, Pagination, EffectFade]}
+          effect="fade"
+          fadeEffect={{ crossFade: true }}
+          speed={800}
+          loop={true}
+          autoplay={{
+            delay: 5000,
+            disableOnInteraction: false,
+            pauseOnMouseEnter: true
+          }}
+          navigation={true}
+          pagination={{
+            clickable: true,
+            el: '.hero-swiper-pagination'
+          }}
         >
           {slides.map((slide, index) => (
-            <div key={slide.id} className="min-w-full h-full relative">
-              {/* Skeleton Loader */}
-              {isLoading && (
-                <div className="absolute inset-0 bg-gray-200 dark:bg-slate-700 animate-pulse"></div>
-              )}
-              
-              {/* Slide Image */}
-              {slide.link ? (
-                <Link to={slide.link}>
-                  <img 
-                    ref={(el) => (imgRefs.current[index] = el)}
-                    src={slide.image} 
-                    alt={slide.alt || slide.title} 
-                    className="w-full h-full object-cover object-center cursor-pointer"
-                    loading="lazy"
-                    onLoad={handleImageLoad}
-                  />
-                  {slide.title && (
-                    <div className="absolute bottom-10 left-10 z-20 hidden md:block">
-                      <h2 className="text-3xl font-bold text-white bg-black/20 backdrop-blur-sm px-4 py-2 rounded-lg">
-                        {slide.title}
-                      </h2>
-                    </div>
-                  )}
-                </Link>
-              ) : (
-                <>
-                  <img 
-                    ref={(el) => (imgRefs.current[index] = el)}
-                    src={slide.image} 
-                    alt={slide.alt} 
-                    className="w-full h-full object-cover object-center"
-                    loading="lazy"
-                    onLoad={handleImageLoad}
-                  />
-                  {slide.title && (
-                    <div className="absolute bottom-10 left-10 z-20 hidden md:block">
-                      <h2 className="text-3xl font-bold text-white bg-black/20 backdrop-blur-sm px-4 py-2 rounded-lg">
-                        {slide.title}
-                      </h2>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+            <SwiperSlide key={slide.id}>
+              <div className="h-full relative">
+                {/* Skeleton Loader */}
+                {isLoading && (
+                  <div className="absolute inset-0 bg-gray-200 dark:bg-slate-700 animate-pulse"></div>
+                )}
+                
+                {/* Slide Image */}
+                {slide.link ? (
+                  <Link to={slide.link} className="block h-full">
+                    <img 
+                      ref={(el) => (imgRefs.current[index] = el)}
+                      src={slide.image} 
+                      alt={slide.alt || slide.title} 
+                      className="w-full h-full object-cover object-center"
+                      loading="lazy"
+                      onLoad={handleImageLoad}
+                    />
+                    {slide.title && (
+                      <div className="absolute bottom-10 left-10 z-20 hidden sm:block">
+                        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white bg-black/20 backdrop-blur-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg">
+                          {slide.title}
+                        </h2>
+                      </div>
+                    )}
+                  </Link>
+                ) : (
+                  <>
+                    <img 
+                      ref={(el) => (imgRefs.current[index] = el)}
+                      src={slide.image} 
+                      alt={slide.alt} 
+                      className="w-full h-full object-cover object-center"
+                      loading="lazy"
+                      onLoad={handleImageLoad}
+                    />
+                    {slide.title && (
+                      <div className="absolute bottom-10 left-10 z-20 hidden sm:block">
+                        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white bg-black/20 backdrop-blur-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg">
+                          {slide.title}
+                        </h2>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </SwiperSlide>
           ))}
-        </div>
-
-        {/* Navigation Arrows */}
-        <button
-          onClick={prevSlide}
-          className="absolute top-1/2 left-4 -translate-y-1/2 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 p-2 rounded-full shadow-lg hover:bg-pink-50 dark:hover:bg-slate-700 transition-all z-10"
-        >
-          <ChevronLeft size={20} />
-        </button>
-        <button
-          onClick={nextSlide}
-          className="absolute top-1/2 right-4 -translate-y-1/2 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 p-2 rounded-full shadow-lg hover:bg-pink-50 dark:hover:bg-slate-700 transition-all z-10"
-        >
-          <ChevronRight size={20} />
-        </button>
-
-        {/* Dots Indicator - Bottom Left */}
-        <div className="absolute bottom-4 left-4 flex gap-2 z-10">
-          {slides.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => goToSlide(index)}
-              className={`w-2 h-2 rounded-full transition-all ${
-                currentIndex === index ? 'bg-pink-600 w-6' : 'bg-white/70 hover:bg-white'
-              }`}
-            />
-          ))}
-        </div>
+        </Swiper>
+        {/* Custom Pagination */}
+        <div className="hero-swiper-pagination absolute bottom-4 left-4 z-10"></div>
       </div>
 
       {/* Products Section */}
@@ -518,6 +490,7 @@ const Home = ({ searchTerm = "" }) => {
           </div>
           
           <Swiper
+            className="popular-series-swiper"
             modules={[Autoplay, Navigation, FreeMode]}
             spaceBetween={24}
             slidesPerView={2}
