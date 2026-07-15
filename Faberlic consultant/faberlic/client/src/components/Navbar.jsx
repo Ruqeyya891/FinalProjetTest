@@ -152,9 +152,12 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
         <div className="flex justify-between items-center gap-4">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link to="/" className="flex flex-col">
-              <span className="text-2xl sm:text-3xl font-light tracking-widest text-black">FABERLIC</span>
-              <span className="text-[8px] sm:text-[10px] font-bold tracking-[0.2em] text-gray-500">BE YOUR BEST</span>
+            <Link to="/">
+              <img
+                src="/images/faberlic-shop-logo.png"
+                alt="Faberlic Shop"
+                className="h-[44px] sm:h-[54px] lg:h-[64px] object-contain"
+              />
             </Link>
           </div>
 
