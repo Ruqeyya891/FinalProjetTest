@@ -17,21 +17,25 @@ const Home = ({ searchTerm = "" }) => {
     { 
       id: 1, 
       image: '/images/heroimage.png', 
+      mobileImage: '/images/heroimage.png', // placeholder - replace with actual mobile image path when available
       alt: 'Faberlic Hero'
     },
     { 
       id: 2, 
       image: '/images/hairimage.png', 
+      mobileImage: '/images/hairimage.png', // placeholder - replace with actual mobile image path when available
       alt: 'Faberlic Hair Products'
     },
     { 
       id: 3, 
       image: '/images/parfum.png', 
+      mobileImage: '/images/parfum.png', // placeholder - replace with actual mobile image path when available
       alt: 'Faberlic Perfume'
     },
     { 
       id: 4, 
       image: '/images/umooglam.png', 
+      mobileImage: '/images/umooglam.png', // placeholder - replace with actual mobile image path when available
       title: 'Umoo Glam', 
       alt: 'Umoo Glam',
       link: '/products' 
@@ -316,14 +320,19 @@ const Home = ({ searchTerm = "" }) => {
                 {/* Slide Image */}
                 {slide.link ? (
                   <Link to={slide.link} className="block h-full">
-                    <img 
-                      ref={(el) => (imgRefs.current[index] = el)}
-                      src={slide.image} 
-                      alt={slide.alt || slide.title} 
-                      className="w-full h-full object-cover object-center"
-                      loading="lazy"
-                      onLoad={handleImageLoad}
-                    />
+                    <picture>
+                      {slide.mobileImage && (
+                        <source media="(max-width: 767px)" srcSet={slide.mobileImage} />
+                      )}
+                      <img 
+                        ref={(el) => (imgRefs.current[index] = el)}
+                        src={slide.image} 
+                        alt={slide.alt || slide.title} 
+                        className="w-full h-full object-contain md:object-cover object-center bg-pink-50"
+                        loading="lazy"
+                        onLoad={handleImageLoad}
+                      />
+                    </picture>
                     {slide.title && (
                       <div className="absolute bottom-10 left-10 z-20 hidden sm:block">
                         <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white bg-black/20 backdrop-blur-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg">
@@ -334,14 +343,19 @@ const Home = ({ searchTerm = "" }) => {
                   </Link>
                 ) : (
                   <>
-                    <img 
-                      ref={(el) => (imgRefs.current[index] = el)}
-                      src={slide.image} 
-                      alt={slide.alt} 
-                      className="w-full h-full object-cover object-center"
-                      loading="lazy"
-                      onLoad={handleImageLoad}
-                    />
+                    <picture>
+                      {slide.mobileImage && (
+                        <source media="(max-width: 767px)" srcSet={slide.mobileImage} />
+                      )}
+                      <img 
+                        ref={(el) => (imgRefs.current[index] = el)}
+                        src={slide.image} 
+                        alt={slide.alt} 
+                        className="w-full h-full object-contain md:object-cover object-center bg-pink-50"
+                        loading="lazy"
+                        onLoad={handleImageLoad}
+                      />
+                    </picture>
                     {slide.title && (
                       <div className="absolute bottom-10 left-10 z-20 hidden sm:block">
                         <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white bg-black/20 backdrop-blur-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg">
