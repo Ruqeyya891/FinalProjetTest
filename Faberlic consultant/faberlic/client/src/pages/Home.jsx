@@ -17,25 +17,25 @@ const Home = ({ searchTerm = "" }) => {
     { 
       id: 1, 
       image: '/images/heroimage.png', 
-      mobileImage: '/images/heroimage.png', // placeholder - replace with actual mobile image path when available
+      mobileImage: '/images/heroimage-mobile.png', // placeholder - replace with actual mobile image path when available
       alt: 'Faberlic Hero'
     },
     { 
       id: 2, 
       image: '/images/hairimage.png', 
-      mobileImage: '/images/hairimage.png', // placeholder - replace with actual mobile image path when available
+      mobileImage: '/images/hairimage-mobile.png', // placeholder - replace with actual mobile image path when available
       alt: 'Faberlic Hair Products'
     },
     { 
       id: 3, 
       image: '/images/parfum.png', 
-      mobileImage: '/images/parfum.png', // placeholder - replace with actual mobile image path when available
+      mobileImage: '/images/parfum-mobile.png', // placeholder - replace with actual mobile image path when available
       alt: 'Faberlic Perfume'
     },
     { 
       id: 4, 
       image: '/images/umooglam.png', 
-      mobileImage: '/images/umooglam.png', // placeholder - replace with actual mobile image path when available
+      mobileImage: '/images/umooglam-mobile.png', // placeholder - replace with actual mobile image path when available
       title: 'Umoo Glam', 
       alt: 'Umoo Glam',
       link: '/products' 
