@@ -169,9 +169,7 @@ const Home = ({ searchTerm = "" }) => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await apiClient.get('/api/users/favorites', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get('/api/users/favorites');
       const favoriteIds = response.data.favorites.map(fav => 
         (typeof fav === 'object' ? fav._id : fav).toString()
       );
@@ -191,8 +189,7 @@ const Home = ({ searchTerm = "" }) => {
 
     try {
       const response = await apiClient.post('/api/users/favorites/toggle', 
-        { productId },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { productId }
       );
       
       // Update favorites state - now we get string ids directly
@@ -210,9 +207,7 @@ const Home = ({ searchTerm = "" }) => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await apiClient.get('/api/users/cart', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get('/api/users/cart');
       setCartItems(response.data.cart);
     } catch (error) {
       console.error('Fetch cart error:', error);
@@ -254,8 +249,7 @@ const Home = ({ searchTerm = "" }) => {
       };
       console.log('Adding to cart (Home):', payload);
       const response = await apiClient.post('/api/users/cart/add', 
-        payload,
-        { headers: { Authorization: `Bearer ${token}` } }
+        payload
       );
       console.log('Add to cart response:', response.data);
       

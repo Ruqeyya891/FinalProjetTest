@@ -28,15 +28,11 @@ const Navbar = ({ isAdmin, searchTerm, setSearchTerm }) => {
         // Check if we're admin or user to use appropriate endpoint
         if (isAdmin) {
           // For admin, we'll rely on the AdminDashboard unread count, but let's still fetch
-          const res = await apiClient.get("/api/messages/chat-list", {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const res = await apiClient.get("/api/messages/chat-list");
           const totalUnread = res.data.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
           setUnreadCount(totalUnread);
         } else {
-          const res = await apiClient.get("/api/messages/unread/count", {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const res = await apiClient.get("/api/messages/unread/count");
           setUnreadCount(res.data.count);
         }
       } catch (err) {

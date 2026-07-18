@@ -51,9 +51,7 @@ const Cart = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await apiClient.get('/api/users/profile', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get('/api/users/profile');
       setUser(response.data.user);
     } catch (error) {
       console.error('User fetch error:', error);
@@ -67,9 +65,7 @@ const Cart = () => {
       return;
     }
     try {
-      const response = await apiClient.get('/api/users/cart', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get('/api/users/cart');
       setCartItems(response.data.cart);
     } catch (error) {
       showError('Səbəti yükləyərkən xəta baş verdi');
@@ -82,9 +78,7 @@ const Cart = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const response = await apiClient.get('/api/users/favorites', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get('/api/users/favorites');
       const favoriteIds = response.data.favorites.map(fav => 
         typeof fav === 'object' ? fav._id : fav
       );
@@ -104,8 +98,7 @@ const Cart = () => {
 
     try {
       const response = await apiClient.post('/api/users/favorites/toggle', 
-        { productId },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { productId }
       );
       
       // Update favorites state
