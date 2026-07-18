@@ -292,7 +292,7 @@ const Home = ({ searchTerm = "" }) => {
       {/* Hero Slider Section */}
       <div className="max-w-[1200px] mx-auto my-4 mb-8 relative overflow-hidden rounded-[12px]">
         <Swiper
-          className="hero-swiper h-[240px] sm:h-[320px] md:h-[390px]"
+          className="hero-swiper h-[520px] sm:h-[320px] md:h-[390px]"
           modules={[Autoplay, Navigation, Pagination, EffectFade]}
           effect="fade"
           fadeEffect={{ crossFade: true }}
@@ -328,7 +328,7 @@ const Home = ({ searchTerm = "" }) => {
                         ref={(el) => (imgRefs.current[index] = el)}
                         src={slide.image} 
                         alt={slide.alt || slide.title} 
-                        className="w-full h-full object-contain md:object-cover object-center bg-pink-50"
+                        className="w-full h-full object-cover object-center bg-pink-50"
                         loading="lazy"
                         onLoad={handleImageLoad}
                       />
@@ -351,7 +351,7 @@ const Home = ({ searchTerm = "" }) => {
                         ref={(el) => (imgRefs.current[index] = el)}
                         src={slide.image} 
                         alt={slide.alt} 
-                        className="w-full h-full object-contain md:object-cover object-center bg-pink-50"
+                        className="w-full h-full object-cover object-center bg-pink-50"
                         loading="lazy"
                         onLoad={handleImageLoad}
                       />
@@ -505,8 +505,8 @@ const Home = ({ searchTerm = "" }) => {
           
           <Swiper
             className="popular-series-swiper"
-            modules={[Autoplay, Navigation, FreeMode]}
-            spaceBetween={24}
+            modules={[Autoplay, FreeMode]}
+            spaceBetween={12}
             slidesPerView={2}
             grabCursor={true}
             loop={true}
@@ -516,16 +516,18 @@ const Home = ({ searchTerm = "" }) => {
               pauseOnMouseEnter: true
             }}
             freeMode={true}
-            navigation={true}
             breakpoints={{
               640: {
-                slidesPerView: 3
+                slidesPerView: 3,
+                spaceBetween: 16
               },
               768: {
-                slidesPerView: 4
+                slidesPerView: 4,
+                spaceBetween: 20
               },
               1024: {
-                slidesPerView: 6
+                slidesPerView: 6,
+                spaceBetween: 24
               }
             }}
           >
@@ -535,16 +537,16 @@ const Home = ({ searchTerm = "" }) => {
                   to={`/series/${series.slug}`}
                   className="group"
                 >
-                  <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-lg transition-all text-center group-hover:border-pink-200 dark:group-hover:border-pink-800 flex items-center justify-center min-h-[140px]">
+                  <div className="bg-white dark:bg-slate-800 p-3 sm:p-5 md:p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-lg transition-all text-center group-hover:border-pink-200 dark:group-hover:border-pink-800 flex items-center justify-center min-h-[105px] sm:min-h-[130px] md:min-h-[150px]">
                     {series.logo ? (
                       <img 
                         src={series.logo} 
                         alt={series.name}
-                        className="h-16 object-contain"
+                        className="h-[60px] sm:h-[75px] md:h-[90px] max-w-full object-contain"
                       />
                     ) : (
-                      <div className="w-16 h-16 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center text-pink-600">
-                        <Sparkles size={32} />
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center text-pink-600">
+                        <Sparkles size={24} className="sm:w-8 sm:h-8 md:w-10 md:h-10" />
                       </div>
                     )}
                   </div>

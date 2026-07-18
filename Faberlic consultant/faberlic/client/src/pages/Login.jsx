@@ -47,7 +47,7 @@ const Login = () => {
           <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-48 h-48 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
           <div className="relative z-10">
             <h2 className="text-3xl font-black mb-3">Xoş Gəldiniz!</h2>
-            <p className="text-pink-100 text-sm font-medium tracking-wide">Faberlic Consultant Hesabınıza Giriş Edin</p>
+            <p className="text-pink-100 text-sm font-medium tracking-wide">Faberlic Shop Hesabınıza Giriş Edin</p>
           </div>
         </div>
         

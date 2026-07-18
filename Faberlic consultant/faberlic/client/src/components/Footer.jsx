@@ -7,7 +7,7 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-1">
-            <h3 className="text-xl font-bold text-pink-600 mb-4">Faberlic Consultant</h3>
+            <h3 className="text-xl font-bold text-pink-600 mb-4">Faberlic Shop</h3>
             <p className="text-gray-500 dark:text-gray-400 text-sm">
               Sizə ən uyğun Faberlik məhsullarını tapmaqda və komandamıza qoşulmaqda kömək edirik.
             </p>
@@ -28,7 +28,7 @@ const Footer = () => {
             <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
               <li>Qeydiyyat (Xanımlar üçün)</li>
               <li>Sifariş və Çatdırılma</li>
-              <li>Dəri Analizi</li>
+              <li>Admin ilə Məsləhət</li>
             </ul>
           </div>
 
